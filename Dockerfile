@@ -22,6 +22,9 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copiar el código del proyecto
 COPY . /app/
 
+# Recolectar archivos estáticos para que Whitenoise los reconozca en producción
+RUN python manage.py collectstatic --noinput
+
 # Exponer el puerto
 EXPOSE 8000
 
