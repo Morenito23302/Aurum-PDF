@@ -1,0 +1,9 @@
+Django>=4.0,<5.0
+PyMuPDF
+pdfplumber
+pandas
+openpyxl
+pdf2image
+pytesseract
+python-docx
+gunicorn

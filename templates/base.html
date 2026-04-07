@@ -1,0 +1,117 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURUM PDF - Herramientas Profesionales</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="aero-background"></div>
+    <div class="bubbles">
+        <div class="bubble"></div><div class="bubble"></div><div class="bubble"></div>
+        <div class="bubble"></div><div class="bubble"></div>
+    </div>
+
+    <header class="glass-header">
+        <div class="logo-container">
+            <img src="{% static 'img/aurum-pdf.png' %}" alt="AURUM PDF Logo" class="app-logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzAzNmZmZiIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkFQPjwvdGV4dD48L3N2Zz4='">
+            <h1>AURUM PDF</h1>
+        </div>
+        <div class="theme-switch">
+            <label for="theme-toggle" class="switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider round"></span>
+            </label>
+            <span id="theme-label">Claro</span>
+        </div>
+    </header>
+
+    <main class="container">
+        <nav class="glass-nav">
+            <button class="nav-btn active" data-target="merge">Unir PDFs</button>
+            <button class="nav-btn" data-target="word">PDF a Word (OCR)</button>
+            <button class="nav-btn" data-target="tables">Extraer Tablas</button>
+            <button class="nav-btn" data-target="images">Extraer Imágenes</button>
+        </nav>
+
+        <div class="glass-panel">
+            <!-- Sección: Unir PDFs -->
+            <section id="merge" class="tool-section active">
+                <h2>Unir Archivos PDF</h2>
+                <p>Arrastra múltiples PDFs. Podrás ordenarlos antes de unirlos.</p>
+                <div class="drop-zone" id="drop-zone-merge">
+                    <span class="drop-text">Arrastra PDFs aquí o <span class="browse">haz clic para explorar</span></span>
+                    <input type="file" id="fileput-merge" multiple accept="application/pdf" hidden>
+                </div>
+                <!-- Previsualización de archivos para unir -->
+                <ul id="file-list-merge" class="file-list sortable-list"></ul>
+                <div class="action-bar">
+                    <input type="text" id="name-merge" placeholder="Nombre de archivo de salida (sin .pdf)" class="input-name">
+                    <button id="btn-merge" class="btn-primary aero-btn" disabled>Unir y Descargar</button>
+                </div>
+            </section>
+
+            <!-- Sección: PDF a Word -->
+            <section id="word" class="tool-section">
+                <h2>Convertir PDF a Word</h2>
+                <p>Extrae texto e imágenes utilizando OCR para editar en Word.</p>
+                <div class="drop-zone single-drop" id="drop-zone-word">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-word" accept="application/pdf" hidden>
+                </div>
+                <div id="file-list-word" class="file-list"></div>
+                <div class="action-bar">
+                    <input type="text" id="name-word" placeholder="Nombre de archivo (sin .docx)" class="input-name">
+                    <button id="btn-word" class="btn-primary aero-btn" disabled>Convertir a Word</button>
+                </div>
+            </section>
+
+            <!-- Sección: Extraer Tablas -->
+            <section id="tables" class="tool-section">
+                <h2>Extraer Tablas a Excel</h2>
+                <p>Detecta y exporta todas las tablas del documento a formato .xlsx.</p>
+                <div class="drop-zone single-drop" id="drop-zone-tables">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-tables" accept="application/pdf" hidden>
+                </div>
+                <div id="file-list-tables" class="file-list"></div>
+                <div class="action-bar">
+                    <input type="text" id="name-tables" placeholder="Nombre de archivo (sin .xlsx)" class="input-name">
+                    <button id="btn-tables" class="btn-primary aero-btn" disabled>Exportar a Excel</button>
+                </div>
+            </section>
+
+            <!-- Sección: Extraer Imágenes -->
+            <section id="images" class="tool-section">
+                <h2>Extraer Imágenes</h2>
+                <p>Obtén todas las figuradas, logos y fotos incrustadas del PDF exportadas a un archivo ZIP.</p>
+                <div class="drop-zone single-drop" id="drop-zone-images">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-images" accept="application/pdf" hidden>
+                </div>
+                <div id="file-list-images" class="file-list"></div>
+                <div class="action-bar">
+                    <input type="text" id="name-images" placeholder="Nombre de archivo (sin .zip)" class="input-name">
+                    <button id="btn-images" class="btn-primary aero-btn" disabled>Extraer a ZIP</button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal de Carga -->
+    <div id="loading-modal" class="modal">
+        <div class="modal-content glass-panel aero-modal">
+            <div class="loader"></div>
+            <h3 id="loading-text">Procesando...</h3>
+            <p>Por favor, espera un momento. El frutiger aero está haciendo su magia.</p>
+        </div>
+    </div>
+
+    <!-- Referenciando SortableJS para Drag and Drop de ordenamiento de listas -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>
