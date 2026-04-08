@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Crear directorios para evitar fallo al instalar Java (requerido por LibreOffice) en python:slim
+RUN mkdir -p /usr/share/man/man1 /usr/share/man/man2
+
 # Instalar dependencias del sistema requeridas para OCR y manipulación de imágenes/PDFs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
