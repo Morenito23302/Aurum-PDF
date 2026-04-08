@@ -7,4 +7,5 @@ urlpatterns = [
     path('api/to-word/', views.api_to_word, name='api_to_word'),
     path('api/extract-tables/', views.api_extract_tables, name='api_extract_tables'),
     path('api/extract-images/', views.api_extract_images, name='api_extract_images'),
+    path('api/any-to-pdf/', views.api_any_to_pdf, name='api_any_to_pdf'),
 ]

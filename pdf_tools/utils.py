@@ -8,6 +8,8 @@ from io import BytesIO
 from pdf2image import convert_from_path
 import pytesseract
 from docx import Document
+import subprocess
+from PIL import Image
 
 def merge_pdfs_util(file_paths, output_path):
     # PyMuPDF para unir
@@ -81,3 +83,28 @@ def extract_images_util(pdf_path, zip_output_path):
                 image_filename = f"image_page{page_num+1}_{img_index+1}.{image_ext}"
                 zipf.writestr(image_filename, image_bytes)
     pdf_document.close()
+
+def convert_to_pdf_util(input_path, output_path, ext):
+    ext = ext.lower()
+    if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
+        image = Image.open(input_path)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        image.save(output_path, "PDF", resolution=100.0)
+    elif ext in ['.docx', '.doc', '.xlsx', '.xls', '.ppt', '.pptx']:
+        output_dir = os.path.dirname(output_path)
+        try:
+            subprocess.run([
+                'libreoffice', '--headless', '--convert-to', 'pdf',
+                input_path, '--outdir', output_dir
+            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            base_name = os.path.splitext(os.path.basename(input_path))[0]
+            generated_pdf = os.path.join(output_dir, base_name + '.pdf')
+            if os.path.exists(generated_pdf) and generated_pdf != output_path:
+                os.rename(generated_pdf, output_path)
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Fallo en conversión de documento: {e.stderr.decode('utf-8', errors='ignore')}")
+        except FileNotFoundError:
+            raise Exception("LibreOffice no está instalado.")
+    else:
+        raise ValueError(f"Formato no soportado: {ext}")

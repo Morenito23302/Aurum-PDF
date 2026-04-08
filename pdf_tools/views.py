@@ -3,7 +3,7 @@ import tempfile
 from django.shortcuts import render
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
-from .utils import merge_pdfs_util, convert_to_word_util, extract_tables_util, extract_images_util
+from .utils import merge_pdfs_util, convert_to_word_util, extract_tables_util, extract_images_util, convert_to_pdf_util
 
 def index(request):
     return render(request, 'base.html')
@@ -112,6 +112,37 @@ def api_extract_images(request):
         try:
             extract_images_util(temp_pdf_path, output_path)
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.zip")
+            return response
+        except Exception as e:
+            return HttpResponseBadRequest(str(e))
+    return HttpResponseBadRequest("Invalid request")
+
+@csrf_exempt
+def api_any_to_pdf(request):
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        custom_name = request.POST.get('custom_name', 'converted_document').strip()
+        if not custom_name:
+            custom_name = 'converted_document'
+            
+        if not file:
+            return HttpResponseBadRequest("Need a file to convert.")
+
+        _, original_ext = os.path.splitext(file.name)
+        original_ext = original_ext.lower()
+        
+        fd, temp_input_path = tempfile.mkstemp(suffix=original_ext)
+        with os.fdopen(fd, 'wb') as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+
+        output_path = temp_input_path.replace(original_ext, '.pdf')
+        if not output_path.endswith('.pdf'):
+            output_path += '.pdf'
+            
+        try:
+            convert_to_pdf_util(temp_input_path, output_path, original_ext)
+            response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
             return response
         except Exception as e:
             return HttpResponseBadRequest(str(e))

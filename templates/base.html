@@ -35,6 +35,7 @@
             <button class="nav-btn" data-target="word">PDF a Word (OCR)</button>
             <button class="nav-btn" data-target="tables">Extraer Tablas</button>
             <button class="nav-btn" data-target="images">Extraer Imágenes</button>
+            <button class="nav-btn" data-target="anytopdf">Convertir a PDF</button>
         </nav>
 
         <div class="glass-panel">
@@ -96,6 +97,21 @@
                 <div class="action-bar">
                     <input type="text" id="name-images" placeholder="Nombre de archivo (sin .zip)" class="input-name">
                     <button id="btn-images" class="btn-primary aero-btn" disabled>Extraer a ZIP</button>
+                </div>
+        </section>
+
+            <!-- Sección: Any to PDF -->
+            <section id="anytopdf" class="tool-section">
+                <h2>Convertir a PDF</h2>
+                <p>Convierte documentos de Word, Excel, PowerPoint o Imágenes a formato PDF.</p>
+                <div class="drop-zone single-drop" id="drop-zone-anytopdf">
+                    <span class="drop-text">Arrastra un archivo aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-anytopdf" accept=".docx,.doc,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,.bmp,.tiff" hidden>
+                </div>
+                <div id="file-list-anytopdf" class="file-list"></div>
+                <div class="action-bar">
+                    <input type="text" id="name-anytopdf" placeholder="Nombre de archivo (sin .pdf)" class="input-name">
+                    <button id="btn-anytopdf" class="btn-primary aero-btn" disabled>A PDF</button>
                 </div>
             </section>
         </div>

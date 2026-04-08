@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hideModal = () => loadingModal.classList.remove('visible');
 
     // 4. File Handlers and Managers
-    const initTool = (toolId, apiEndpoint, isMultiple = false) => {
+    const initTool = (toolId, apiEndpoint, isMultiple = false, acceptedExtensions = ['.pdf']) => {
         const dropZone = document.getElementById(`drop-zone-${toolId}`);
         const fileInput = document.getElementById(`fileput-${toolId}`);
         const fileListContainer = document.getElementById(`file-list-${toolId}`);
@@ -96,13 +96,17 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const handleFiles = (files) => {
-            const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf');
-            if (pdfFiles.length === 0) return alert("Solo se aceptan archivos PDF.");
+            const validFiles = Array.from(files).filter(f => {
+                if (acceptedExtensions.includes('*')) return true;
+                const extension = "." + f.name.split('.').pop().toLowerCase();
+                return acceptedExtensions.includes(extension) || (f.type === 'application/pdf' && acceptedExtensions.includes('.pdf'));
+            });
+            if (validFiles.length === 0) return alert("Archivos no soportados o inválidos para esta herramienta.");
 
             if (isMultiple) {
-                selectedFiles = [...selectedFiles, ...pdfFiles];
+                selectedFiles = [...selectedFiles, ...validFiles];
             } else {
-                selectedFiles = [pdfFiles[0]];
+                selectedFiles = [validFiles[0]];
             }
             updateUI();
         };
@@ -189,10 +193,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Initialize all 4 tools
+    // Initialize all tools
     initTool('merge', '/api/merge/', true);
     initTool('word', '/api/to-word/', false);
     initTool('tables', '/api/extract-tables/', false);
     initTool('images', '/api/extract-images/', false);
+    initTool('anytopdf', '/api/any-to-pdf/', false, ['.docx', '.doc', '.xlsx', '.xls', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.bmp', '.tiff']);
 
 });
