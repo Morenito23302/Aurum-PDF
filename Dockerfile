@@ -4,9 +4,10 @@ FROM python:3.10-slim
 # Evitar que Python escriba archivos .pyc y forzar logs sin buffer
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Instalar dependencias del sistema requeridas para OCR y manipulación de imágenes/PDFs
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
     libreoffice \
