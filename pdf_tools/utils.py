@@ -21,59 +21,15 @@ def merge_pdfs_util(file_paths, output_path):
     result_pdf.close()
 
 def convert_to_word_util(pdf_path, output_path):
-    """
-    Convierte un PDF a DOCX conservando el layout exacto: texto, tablas, imágenes,
-    fuentes y estilos. Estrategia:
-    1. LibreOffice (mejor fidelidad, ya instalado en el servidor)
-    2. pdf2docx como fallback
-    """
-    import shutil
-
-    # ── Estrategia 1: LibreOffice ──────────────────────────────────────────────
-    if shutil.which("libreoffice"):
-        try:
-            output_dir = os.path.dirname(output_path)
-
-            result = subprocess.run(
-                [
-                    "libreoffice",
-                    "--headless",
-                    "--infilter=writer_pdf_import",
-                    "--convert-to", "docx:MS Word 2007 XML",
-                    pdf_path,
-                    "--outdir", output_dir,
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=120,
-            )
-
-            # LibreOffice genera el archivo con el mismo nombre base del PDF
-            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-            generated = os.path.join(output_dir, base_name + ".docx")
-
-            if os.path.exists(generated):
-                if generated != output_path:
-                    os.replace(generated, output_path)
-                return  # ¡Exitoso!
-            else:
-                print("LibreOffice no generó el archivo esperado; usando fallback.")
-        except subprocess.TimeoutExpired:
-            print("LibreOffice tardó demasiado; usando fallback.")
-        except subprocess.CalledProcessError as e:
-            print(f"LibreOffice falló: {e.stderr.decode('utf-8', errors='ignore')}; usando fallback.")
-        except Exception as e:
-            print(f"Error inesperado con LibreOffice: {e}; usando fallback.")
-
-    # ── Estrategia 2: pdf2docx ────────────────────────────────────────────────
+    from pdf2docx import Converter
     try:
-        from pdf2docx import Converter
+        # Usar pdf2docx para conservar diseño exacto, tablas, imágenes y texto
         cv = Converter(pdf_path)
         cv.convert(output_path, start=0, end=None)
         cv.close()
     except Exception as e:
-        raise Exception(f"Todos los métodos de conversión fallaron: {e}")
+        print(f"Error en conversión directa a DOCX: {e}")
+        raise Exception("Falló la conversión de PDF a DOCX")
 
 
 def extract_tables_util(pdf_path, output_path):
