@@ -21,30 +21,16 @@ def merge_pdfs_util(file_paths, output_path):
     result_pdf.close()
 
 def convert_to_word_util(pdf_path, output_path):
-    doc = Document()
+    from pdf2docx import Converter
     try:
-        # Intento con OCR (Requiere Poppler y Tesseract)
-        images = convert_from_path(pdf_path)
-        for i, image in enumerate(images):
-            # OCR con pytesseract
-            text = pytesseract.image_to_string(image)
-            doc.add_paragraph(text)
-            if i < len(images) - 1:
-                doc.add_page_break()
+        # Usar pdf2docx para conservar diseño exacto, tablas, imágenes y texto
+        cv = Converter(pdf_path)
+        cv.convert(output_path, start=0, end=None)
+        cv.close()
     except Exception as e:
-        # Fallback a extracción de texto directa si falla el OCR o falta dependencia
-        print(f"OCR falló, usando método directo: {e}")
-        doc = Document()  # Reset
-        pdf = fitz.open(pdf_path)
-        for page_num in range(len(pdf)):
-            page = pdf[page_num]
-            text = page.get_text()
-            doc.add_paragraph(text)
-            if page_num < len(pdf) - 1:
-                doc.add_page_break()
-        pdf.close()
-        
-    doc.save(output_path)
+        print(f"Error en conversión directa a DOCX: {e}")
+        raise Exception("Falló la conversión de PDF a DOCX")
+
 
 def extract_tables_util(pdf_path, output_path):
     # Usar pdfplumber y pandas

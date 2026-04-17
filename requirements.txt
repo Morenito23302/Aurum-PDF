@@ -9,3 +9,4 @@ python-docx
 gunicorn
 whitenoise
 Pillow
+pdf2docx
