@@ -143,15 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return (i ? 'italic ' : '') + (b ? 'bold ' : '');
     };
 
-    /* ── Redraw edits onto edit-canvas
-         FIX: Restore clean snapshot to ePdfC first so drag doesn't leave a duplicate.
-         FIX: No white rect — text draws directly on top so table lines aren't hidden. ── */
+    /* ── Redraw edits ── */
     const redrawEdits = pageIdx => {
-        // 1) Restore the clean rendered page (eliminates previous edit artifacts + drag duplicates)
         if (E.snapshot) {
             ePdfC.getContext('2d').putImageData(E.snapshot, 0, 0);
         }
-        // 2) Clear edit-canvas overlay
         const ctx = eEditC.getContext('2d');
         ctx.clearRect(0, 0, eEditC.width, eEditC.height);
         const pg = E.pages[pageIdx]; if (!pg) return;
@@ -160,31 +156,22 @@ document.addEventListener('DOMContentLoaded', () => {
         pg.blocks.forEach(blk => {
             const ch = E.changes[blk.id]; if (!ch) return;
             const effX0 = (ch.x0 ?? blk.x0) * s;
-            const effY0 = (ch.y0 ?? blk.y0) * s;
-            const effY1 = (ch.y1 ?? blk.y1) * s;
-            const effX1 = (ch.x1 ?? blk.x1) * s;
-            const sz    = (ch.size ?? blk.size) * s;
+            const dy = (ch.y0 !== undefined) ? (ch.y0 - blk.y0) : 0;
+            const baseOriginY = blk.origin_y ?? blk.y1;
+            // Pequeño ajuste de -0.5px para alinear perfectamente con el render de PDF.js
+            const effOriginY = (baseOriginY + dy) * s - 0.5;
+            const sz = (ch.size ?? blk.size) * s;
 
-            // Erase original text from ePdfC using background sampling from snapshot edges
-            // We draw a rect sampled from the snapshot's background area (border pixels of block)
-            if (E.snapshot) {
-                const snapCtx = ePdfC.getContext('2d');
-                // Sample color from just above the block (1px above y0)
-                const sampleY = Math.max(0, Math.round(effY0) - 2);
-                const sampleX = Math.round(effX0) + 2;
-                const px = snapCtx.getImageData(sampleX, sampleY, 1, 1).data;
-                // If bg is light (likely white/near-white), use it; else use white
-                const bgR = px[0], bgG = px[1], bgB = px[2];
-                snapCtx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
-                snapCtx.fillRect(effX0 - 1, effY0 - 1, (effX1 - effX0) + 2, (effY1 - effY0) + 2);
-            }
-
-            // Draw new text on eEditC (no background rect here, ePdfC already updated)
-            ctx.font         = `${fontStyle(blk.font, blk.flags)}${sz}px ${fontFamily(blk.font)}`;
-            ctx.fillStyle    = ch.color_hex ?? blk.color_hex;
+            ctx.font = `${fontStyle(blk.font, blk.flags)}${sz}px ${fontFamily(blk.font)}`;
+            ctx.fillStyle = ch.color_hex ?? blk.color_hex;
             ctx.textBaseline = 'alphabetic';
-            const lines      = (ch.text ?? blk.text).split('\n');
-            lines.forEach((ln, i) => ctx.fillText(ln, effX0, effY1 - (lines.length - 1 - i) * sz * 1.2));
+            
+            const lines = (ch.text ?? blk.text).split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                // Line spacing más natural para el visor
+                const lineOffset = (lines.length - 1 - i) * sz * 1.05;
+                ctx.fillText(lines[i], effX0, effOriginY - lineOffset);
+            }
         });
     };
 
@@ -444,6 +431,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 page: pg.page,
                 x0: ch.x0 ?? blk.x0, y0: ch.y0 ?? blk.y0,
                 x1: ch.x1 ?? blk.x1, y1: ch.y1 ?? blk.y1,
+                origin_y: (ch.y0 !== undefined)
+                    ? (blk.origin_y ?? blk.y1) + (ch.y0 - blk.y0)  // ajuste por arrastre
+                    : (blk.origin_y ?? blk.y1),
                 font: blk.font, flags: blk.flags,
                 size: ch.size ?? blk.size,
                 color_hex: ch.color_hex ?? blk.color_hex,

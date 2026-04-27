@@ -171,6 +171,7 @@ def extract_text_blocks_util(pdf_path):
                     g = (color_int >> 8) & 0xFF
                     b = color_int & 0xFF
                     bbox = span["bbox"]
+                    origin = span.get("origin", (bbox[0], bbox[3]))
                     page_data["blocks"].append({
                         "id": f"p{page_num}_s{counter}",
                         "text": text,
@@ -178,6 +179,7 @@ def extract_text_blocks_util(pdf_path):
                         "y0": round(bbox[1], 2),
                         "x1": round(bbox[2], 2),
                         "y1": round(bbox[3], 2),
+                        "origin_y": round(origin[1], 2),  # baseline exacto
                         "size": round(span.get("size", 12), 2),
                         "font": span.get("font", "Helvetica"),
                         "color_hex": "#{:02x}{:02x}{:02x}".format(r, g, b),
@@ -240,12 +242,23 @@ def apply_text_edits_util(pdf_path, output_path, edits):
             continue
         page = doc[page_num]
 
-        # --- Paso 1: marcar redacciones ---
+        # --- Paso 1: marcar redacciones QUIRÚRGICAS (solo el área del texto) ---
         for edit in edit_list:
-            rect = fitz.Rect(edit["x0"], edit["y0"], edit["x1"], edit["y1"])
-            rect = rect + (-1, -1, 1, 1)   # expandir 1pt para cubrir ascendentes/descendentes
-            page.add_redact_annot(rect, fill=(1, 1, 1))
-        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+            # En lugar de usar todo el bbox (que suele tocar líneas), 
+            # usamos un área más pequeña centrada en el baseline.
+            base_y = edit.get("origin_y", edit["y1"])
+            size = edit.get("size", 12)
+            # Altura quirúrgica: de baseline - 80% de size hasta baseline + 20%
+            rect = fitz.Rect(edit["x0"], base_y - (size * 0.8), edit["x1"], base_y + (size * 0.2))
+            
+            # Marcamos redacción con fondo blanco
+            page.add_redact_annot(rect, fill=(1, 1, 1)) 
+        
+        # Aplicamos redacciones PRESERVANDO estrictamente gráficos (líneas de tablas)
+        page.apply_redactions(
+            images=fitz.PDF_REDACT_IMAGE_NONE,
+            graphics=fitz.PDF_REDACT_LINE_ART_NONE
+        )
 
         # --- Paso 2: re-insertar texto ---
         for edit in edit_list:
@@ -264,9 +277,10 @@ def apply_text_edits_util(pdf_path, output_path, edits):
             fontname = _map_font(edit.get("font", "Helvetica"), edit.get("flags", 0))
             size     = float(edit.get("size", 12))
 
-            # insert_text usa el punto de baseline (esquina inferior-izquierda del texto)
+            # Usar origin_y (baseline exacto) en lugar de y1 para evitar corrimiento vertical
+            baseline_y = edit.get("origin_y", edit["y1"])
             page.insert_text(
-                fitz.Point(edit["x0"], edit["y1"]),
+                fitz.Point(edit["x0"], baseline_y),
                 new_text,
                 fontsize=size,
                 fontname=fontname,

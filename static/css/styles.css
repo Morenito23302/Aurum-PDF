@@ -489,15 +489,16 @@ input:checked + .slider:before { transform: translateX(26px); }
 #pdf-viewer-scroll {
     overflow: auto;
     max-height: 72vh;
-    padding: 12px;
+    padding: 20px;
     box-sizing: border-box;
-    /* sin flex para que overflow funcione en ambas direcciones */
+    display: block;
 }
 #pdf-canvas-wrapper {
     position: relative;
+    margin: 0 auto;
     display: block;
-    margin: 0 auto;     /* centrar sin flex */
     line-height: 0;
+    box-sizing: content-box;
 }
 #pdf-canvas {
     display: block;
