@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AURUM PDF - Herramientas Profesionales</title>
+    <meta name="description" content="Herramientas profesionales para PDF: unir, convertir, editar, extraer tablas e imágenes.">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="aero-background"></div>
@@ -17,7 +18,7 @@
 
     <header class="glass-header">
         <div class="logo-container">
-            <img src="{% static 'img/aurum-pdf.png' %}" alt="AURUM PDF Logo" class="app-logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzAzNmZmZiIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkFQPjwvdGV4dD48L3N2Zz4='">
+            <img src="{% static 'img/aurum-pdf.png' %}" alt="AURUM PDF Logo" class="app-logo" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzAzNmZmZiIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkFQPC90ZXh0Pjwvc3ZnPg=='">
             <h1>AURUM PDF</h1>
         </div>
         <div class="theme-switch">
@@ -36,10 +37,12 @@
             <button class="nav-btn" data-target="tables">Extraer Tablas</button>
             <button class="nav-btn" data-target="images">Extraer Imágenes</button>
             <button class="nav-btn" data-target="anytopdf">Convertir a PDF</button>
+            <button class="nav-btn nav-btn-editor" data-target="editpdf">✏️ Editar PDF</button>
         </nav>
 
         <div class="glass-panel">
-            <!-- Sección: Unir PDFs -->
+
+            <!-- ─── Unir PDFs ─── -->
             <section id="merge" class="tool-section active">
                 <h2>Unir Archivos PDF</h2>
                 <p>Arrastra múltiples PDFs. Podrás ordenarlos antes de unirlos.</p>
@@ -47,7 +50,6 @@
                     <span class="drop-text">Arrastra PDFs aquí o <span class="browse">haz clic para explorar</span></span>
                     <input type="file" id="fileput-merge" multiple accept="application/pdf" hidden>
                 </div>
-                <!-- Previsualización de archivos para unir -->
                 <ul id="file-list-merge" class="file-list sortable-list"></ul>
                 <div class="action-bar">
                     <input type="text" id="name-merge" placeholder="Nombre de archivo de salida (sin .pdf)" class="input-name">
@@ -55,7 +57,7 @@
                 </div>
             </section>
 
-            <!-- Sección: PDF a Word -->
+            <!-- ─── PDF a Word ─── -->
             <section id="word" class="tool-section">
                 <h2>Convertir PDF a Word</h2>
                 <p>Extrae texto e imágenes utilizando OCR para editar en Word.</p>
@@ -70,7 +72,7 @@
                 </div>
             </section>
 
-            <!-- Sección: Extraer Tablas -->
+            <!-- ─── Extraer Tablas ─── -->
             <section id="tables" class="tool-section">
                 <h2>Extraer Tablas a Excel</h2>
                 <p>Detecta y exporta todas las tablas del documento a formato .xlsx.</p>
@@ -85,10 +87,10 @@
                 </div>
             </section>
 
-            <!-- Sección: Extraer Imágenes -->
+            <!-- ─── Extraer Imágenes ─── -->
             <section id="images" class="tool-section">
                 <h2>Extraer Imágenes</h2>
-                <p>Obtén todas las figuradas, logos y fotos incrustadas del PDF exportadas a un archivo ZIP.</p>
+                <p>Obtén todas las figuras, logos y fotos incrustadas del PDF exportadas a un archivo ZIP.</p>
                 <div class="drop-zone single-drop" id="drop-zone-images">
                     <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
                     <input type="file" id="fileput-images" accept="application/pdf" hidden>
@@ -98,9 +100,9 @@
                     <input type="text" id="name-images" placeholder="Nombre de archivo (sin .zip)" class="input-name">
                     <button id="btn-images" class="btn-primary aero-btn" disabled>Extraer a ZIP</button>
                 </div>
-        </section>
+            </section>
 
-            <!-- Sección: Any to PDF -->
+            <!-- ─── Convertir a PDF ─── -->
             <section id="anytopdf" class="tool-section">
                 <h2>Convertir a PDF</h2>
                 <p>Convierte documentos de Word, Excel, PowerPoint o Imágenes a formato PDF.</p>
@@ -114,7 +116,107 @@
                     <button id="btn-anytopdf" class="btn-primary aero-btn" disabled>A PDF</button>
                 </div>
             </section>
-        </div>
+
+            <!-- ─────────────────────────────────────────────
+                 EDITAR PDF
+            ───────────────────────────────────────────── -->
+            <section id="editpdf" class="tool-section">
+                <h2>Editar Texto del PDF</h2>
+                <p>Selecciona bloques de texto para editarlos. Imágenes, tablas, encabezados y logos se conservan intactos.</p>
+
+                <!-- Advertencia -->
+                <div class="editor-warning">
+                    <span class="editor-warning-icon">⚠️</span>
+                    <div>
+                        <strong>Importante:</strong> Esta función requiere que el PDF tenga una
+                        <strong>capa de texto digital</strong>. Los PDFs escaneados (imágenes sin texto)
+                        no son editables con esta herramienta — usa <em>PDF a Word (OCR)</em> primero.
+                    </div>
+                </div>
+
+                <!-- Drop zone (visible antes de cargar) -->
+                <div class="drop-zone single-drop" id="drop-zone-editpdf" style="margin-top:18px;">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-editpdf" accept="application/pdf" hidden>
+                </div>
+                <div id="file-list-editpdf" class="file-list"></div>
+
+                <!-- ── Workspace del editor (oculto hasta cargar PDF) ── -->
+                <div id="editor-workspace" style="display:none">
+
+                    <!-- Toolbar de navegación de páginas -->
+                    <div class="editor-toolbar">
+                        <button id="btn-prev-page" class="toolbar-btn" title="Página anterior">&#9664;</button>
+                        <span id="page-indicator" class="page-indicator">Página 1 de 1</span>
+                        <button id="btn-next-page" class="toolbar-btn" title="Página siguiente">&#9654;</button>
+                        <div class="toolbar-sep"></div>
+                        <span id="editor-blocks-info" class="toolbar-info"></span>
+                        <div style="flex:1"></div>
+                        <button id="btn-close-editor" class="toolbar-btn toolbar-btn-danger" title="Cerrar editor">✕ Cerrar</button>
+                    </div>
+
+                    <!-- Layout dos columnas -->
+                    <div class="editor-columns">
+
+                        <!-- Visor PDF + overlays -->
+                        <div class="editor-viewer-wrap">
+                            <div id="pdf-viewer-scroll">
+                                <div id="pdf-canvas-wrapper">
+                                    <canvas id="pdf-canvas"></canvas>
+                                    <div id="pdf-overlays"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel de propiedades -->
+                        <div class="editor-props-panel glass-props">
+                            <div id="props-empty-state">
+                                <div class="props-empty-icon">✏️</div>
+                                <p>Haz clic en un bloque de texto resaltado para editarlo</p>
+                            </div>
+                            <div id="props-editor-form" style="display:none">
+                                <div class="props-header">
+                                    <span class="props-block-id" id="props-block-label">Bloque</span>
+                                    <button id="btn-reset-block" class="props-reset-btn" title="Restaurar texto original">↩ Restaurar</button>
+                                </div>
+                                <label class="prop-label">Texto</label>
+                                <textarea id="prop-text" class="prop-textarea" rows="5" spellcheck="false"></textarea>
+
+                                <label class="prop-label">Color del texto</label>
+                                <div class="color-row">
+                                    <input type="color" id="prop-color" class="prop-color-input" value="#000000">
+                                    <span id="prop-color-hex" class="color-hex-label">#000000</span>
+                                </div>
+
+                                <label class="prop-label">Tamaño de fuente (pt)</label>
+                                <input type="number" id="prop-size" class="prop-size-input" min="4" max="144" step="0.5">
+
+                                <label class="prop-label">Fuente original</label>
+                                <div id="prop-font-display" class="prop-font-display"></div>
+
+                                <button id="btn-apply-block" class="aero-btn btn-apply-block">Aplicar cambios</button>
+                            </div>
+
+                            <!-- Resumen de cambios -->
+                            <div id="changes-summary" style="display:none">
+                                <div class="changes-count-row">
+                                    <span class="changes-dot"></span>
+                                    <span id="changes-count-text">0 bloques modificados</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /editor-columns -->
+
+                    <!-- Barra de exportación -->
+                    <div class="action-bar editor-export-bar">
+                        <input type="text" id="name-editpdf" placeholder="Nombre del archivo editado (sin .pdf)" class="input-name">
+                        <button id="btn-export-edited" class="aero-btn btn-export-pdf">⬇ Exportar PDF Editado</button>
+                    </div>
+
+                </div><!-- /editor-workspace -->
+            </section>
+
+        </div><!-- /glass-panel -->
     </main>
 
     <!-- Modal de Carga -->
@@ -126,8 +228,13 @@
         </div>
     </div>
 
-    <!-- Referenciando SortableJS para Drag and Drop de ordenamiento de listas -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <script src="{% static 'js/app.js' %}"></script>
 </body>
 </html>

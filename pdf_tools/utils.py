@@ -1,4 +1,5 @@
 import os
+import json as _json
 import fitz  # PyMuPDF
 import tempfile
 import zipfile
@@ -138,3 +139,139 @@ def convert_to_pdf_util(input_path, output_path, ext):
             raise Exception("LibreOffice no está instalado.")
     else:
         raise ValueError(f"Formato no soportado: {ext}")
+
+
+def extract_text_blocks_util(pdf_path):
+    """Extrae todos los bloques de texto (spans) del PDF con posición, fuente y color."""
+    doc = fitz.open(pdf_path)
+    result = []
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        page_dict = page.get_text(
+            "dict",
+            flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_LIGATURES
+        )
+        page_data = {
+            "page": page_num,
+            "width": round(page.rect.width, 2),
+            "height": round(page.rect.height, 2),
+            "blocks": []
+        }
+        counter = 0
+        for block in page_dict.get("blocks", []):
+            if block.get("type") != 0:   # 0 = text, 1 = image
+                continue
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    text = span.get("text", "")
+                    if not text.strip():
+                        continue
+                    color_int = span.get("color", 0)
+                    r = (color_int >> 16) & 0xFF
+                    g = (color_int >> 8) & 0xFF
+                    b = color_int & 0xFF
+                    bbox = span["bbox"]
+                    page_data["blocks"].append({
+                        "id": f"p{page_num}_s{counter}",
+                        "text": text,
+                        "x0": round(bbox[0], 2),
+                        "y0": round(bbox[1], 2),
+                        "x1": round(bbox[2], 2),
+                        "y1": round(bbox[3], 2),
+                        "size": round(span.get("size", 12), 2),
+                        "font": span.get("font", "Helvetica"),
+                        "color_hex": "#{:02x}{:02x}{:02x}".format(r, g, b),
+                        "flags": span.get("flags", 0),
+                    })
+                    counter += 1
+        result.append(page_data)
+    doc.close()
+    return result
+
+
+def _map_font(font_name, flags=0):
+    """Mapea nombre de fuente del PDF a una de las fuentes base-14 de PyMuPDF."""
+    # Quitar prefijo de subset p.ej. "ABCDEF+ArialMT" → "ArialMT"
+    name = font_name.split("+")[-1].lower()
+    is_bold   = bool(flags & 16) or "bold" in name or "black" in name or "heavy" in name
+    is_italic = bool(flags & 2)  or "italic" in name or "oblique" in name or "it" in name
+
+    if any(x in name for x in ["helvetica", "arial", "calibri", "tahoma",
+                                 "verdana", "gothic", "futura", "gill"]):
+        if is_bold and is_italic: return "helv"   # no helv-bi in base14, use helv
+        if is_bold:               return "hebo"
+        if is_italic:             return "heoi"
+        return "helv"
+    elif any(x in name for x in ["times", "palatino", "garamond", "georgia",
+                                  "roman", "minion", "caslon"]):
+        if is_bold and is_italic: return "tibi"
+        if is_bold:               return "tibo"
+        if is_italic:             return "tiit"
+        return "tiro"
+    elif any(x in name for x in ["courier", "mono", "consolas", "menlo",
+                                   "inconsolata", "lucidacon"]):
+        if is_bold and is_italic: return "cobi"
+        if is_bold:               return "cobo"
+        if is_italic:             return "coit"
+        return "cour"
+    return "helv"   # fallback universal
+
+
+def apply_text_edits_util(pdf_path, output_path, edits):
+    """
+    Aplica ediciones de texto al PDF:
+    - Redacta (borra) el texto original con un rectángulo del color de fondo.
+    - Re-inserta el nuevo texto en la misma posición.
+    Imágenes, tablas, encabezados, logos y marcas de agua NO se tocan.
+
+    edits: lista de dicts con claves:
+        page (int), x0/y0/x1/y1 (float), font (str), flags (int),
+        new_text (str), color_hex (str), size (float)
+    """
+    from collections import defaultdict
+    doc = fitz.open(pdf_path)
+
+    page_edits = defaultdict(list)
+    for edit in edits:
+        page_edits[int(edit["page"])].append(edit)
+
+    for page_num, edit_list in page_edits.items():
+        if page_num >= len(doc):
+            continue
+        page = doc[page_num]
+
+        # --- Paso 1: marcar redacciones ---
+        for edit in edit_list:
+            rect = fitz.Rect(edit["x0"], edit["y0"], edit["x1"], edit["y1"])
+            rect = rect + (-1, -1, 1, 1)   # expandir 1pt para cubrir ascendentes/descendentes
+            page.add_redact_annot(rect, fill=(1, 1, 1))
+        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+
+        # --- Paso 2: re-insertar texto ---
+        for edit in edit_list:
+            new_text = edit.get("new_text", "").strip()
+            if not new_text:
+                continue   # bloque eliminado intencionalmente
+
+            color_hex = edit.get("color_hex", "#000000").lstrip("#")
+            try:
+                r = int(color_hex[0:2], 16) / 255.0
+                g = int(color_hex[2:4], 16) / 255.0
+                b = int(color_hex[4:6], 16) / 255.0
+            except Exception:
+                r, g, b = 0.0, 0.0, 0.0
+
+            fontname = _map_font(edit.get("font", "Helvetica"), edit.get("flags", 0))
+            size     = float(edit.get("size", 12))
+
+            # insert_text usa el punto de baseline (esquina inferior-izquierda del texto)
+            page.insert_text(
+                fitz.Point(edit["x0"], edit["y1"]),
+                new_text,
+                fontsize=size,
+                fontname=fontname,
+                color=(r, g, b),
+            )
+
+    doc.save(output_path, garbage=4, deflate=True, clean=True)
+    doc.close()
