@@ -441,6 +441,17 @@ input:checked + .slider:before { transform: translateX(26px); }
 .toolbar-btn-danger:hover {
     background: rgba(239,68,68,0.3) !important;
 }
+.zoom-label {
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 44px;
+    text-align: center;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 7px;
+    padding: 4px 7px;
+    color: var(--text-color);
+}
 .page-indicator {
     font-weight: 600;
     font-size: 0.9rem;
@@ -492,6 +503,12 @@ input:checked + .slider:before { transform: translateX(26px); }
     border-radius: 4px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
+#edit-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    border-radius: 4px;
+    pointer-events: none;  /* clicks pasan a los overlays */
+}
 
 /* Overlays de texto */
 #pdf-overlays {
@@ -504,26 +521,28 @@ input:checked + .slider:before { transform: translateX(26px); }
     box-sizing: border-box;
     border: 1.5px solid transparent;
     border-radius: 2px;
-    cursor: pointer;
+    cursor: grab;
     pointer-events: all;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 .text-overlay:hover {
-    background: rgba(99, 102, 241, 0.18);
-    border-color: rgba(99, 102, 241, 0.6);
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.55);
 }
 .text-overlay.selected {
-    background: rgba(99, 102, 241, 0.22);
+    background: rgba(99, 102, 241, 0.2);
     border-color: #6366f1;
     box-shadow: 0 0 0 2px rgba(99,102,241,0.25);
+    cursor: grab;
 }
+.text-overlay.dragging { cursor: grabbing !important; opacity: 0.75; }
 .text-overlay.modified {
     border-color: #10b981;
-    background: rgba(16,185,129,0.1);
+    background: rgba(16,185,129,0.08);
 }
 .text-overlay.modified.selected {
     border-color: #6366f1;
-    background: rgba(99,102,241,0.22);
+    background: rgba(99,102,241,0.2);
 }
 
 /* Panel de propiedades */

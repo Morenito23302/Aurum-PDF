@@ -37,7 +37,7 @@
             <button class="nav-btn" data-target="tables">Extraer Tablas</button>
             <button class="nav-btn" data-target="images">Extraer Imágenes</button>
             <button class="nav-btn" data-target="anytopdf">Convertir a PDF</button>
-            <button class="nav-btn nav-btn-editor" data-target="editpdf">✏️ Editar PDF</button>
+            <button class="nav-btn nav-btn-editor" data-target="editpdf">Editar PDF</button>
         </nav>
 
         <div class="glass-panel">
@@ -150,9 +150,14 @@
                         <span id="page-indicator" class="page-indicator">Página 1 de 1</span>
                         <button id="btn-next-page" class="toolbar-btn" title="Página siguiente">&#9654;</button>
                         <div class="toolbar-sep"></div>
+                        <button id="btn-zoom-out" class="toolbar-btn" title="Alejar">&#8722;</button>
+                        <span id="zoom-label" class="zoom-label">100%</span>
+                        <button id="btn-zoom-in" class="toolbar-btn" title="Acercar">&#43;</button>
+                        <button id="btn-zoom-fit" class="toolbar-btn" title="Ajustar a pantalla">Ajustar</button>
+                        <div class="toolbar-sep"></div>
                         <span id="editor-blocks-info" class="toolbar-info"></span>
                         <div style="flex:1"></div>
-                        <button id="btn-close-editor" class="toolbar-btn toolbar-btn-danger" title="Cerrar editor">✕ Cerrar</button>
+                        <button id="btn-close-editor" class="toolbar-btn toolbar-btn-danger" title="Cerrar editor">&#10005; Cerrar</button>
                     </div>
 
                     <!-- Layout dos columnas -->
@@ -163,6 +168,7 @@
                             <div id="pdf-viewer-scroll">
                                 <div id="pdf-canvas-wrapper">
                                     <canvas id="pdf-canvas"></canvas>
+                                    <canvas id="edit-canvas"></canvas>
                                     <div id="pdf-overlays"></div>
                                 </div>
                             </div>
