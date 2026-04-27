@@ -73,8 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(await res.text());
                 const disp = res.headers.get('Content-Disposition') || '';
                 const m    = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
-                const dl   = m ? m[1].replace(/['"]/g, '') : 'descarga';
-                const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: dl });
+                const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: m ? m[1].replace(/['"]/g,'') : 'descarga' });
                 document.body.appendChild(a); a.click(); a.remove();
                 files = []; ui(); name.value = '';
             } catch (e) { alert('Error: ' + e.message); } finally { hideModal(); }
@@ -94,7 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
         file: null, pdfDoc: null, currentPage: 1, totalPages: 0,
         autoScale: 1.0, zoomLevel: 1.0,
         get scale() { return this.autoScale * this.zoomLevel; },
-        pages: [], changes: {}, selectedId: null
+        pages: [], changes: {}, selectedId: null,
+        snapshot: null   // ImageData of the clean rendered page
     };
 
     const $  = id => document.getElementById(id);
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const eChSum     = $('changes-summary');
     const eChCnt     = $('changes-count-text');
 
-    /* Font helpers */
+    /* ── Font helpers (canvas) ── */
     const fontFamily = fn => {
         const n = fn.split('+').pop().toLowerCase();
         if (/times|roman|palatino|garamond|georgia|minion|caslon/.test(n)) return '"Times New Roman",Times,serif';
@@ -143,69 +143,107 @@ document.addEventListener('DOMContentLoaded', () => {
         return (i ? 'italic ' : '') + (b ? 'bold ' : '');
     };
 
-    /* Real-time canvas preview */
+    /* ── Redraw edits onto edit-canvas
+         FIX: Restore clean snapshot to ePdfC first so drag doesn't leave a duplicate.
+         FIX: No white rect — text draws directly on top so table lines aren't hidden. ── */
     const redrawEdits = pageIdx => {
+        // 1) Restore the clean rendered page (eliminates previous edit artifacts + drag duplicates)
+        if (E.snapshot) {
+            ePdfC.getContext('2d').putImageData(E.snapshot, 0, 0);
+        }
+        // 2) Clear edit-canvas overlay
         const ctx = eEditC.getContext('2d');
         ctx.clearRect(0, 0, eEditC.width, eEditC.height);
         const pg = E.pages[pageIdx]; if (!pg) return;
         const s  = E.scale;
+
         pg.blocks.forEach(blk => {
             const ch = E.changes[blk.id]; if (!ch) return;
-            const x0 = (ch.x0 ?? blk.x0) * s, y0 = (ch.y0 ?? blk.y0) * s;
-            const x1 = (ch.x1 ?? blk.x1) * s, y1 = (ch.y1 ?? blk.y1) * s;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(x0 - 1, y0 - 1, (x1 - x0) + 2, (y1 - y0) + 2);
-            const sz = (ch.size ?? blk.size) * s;
+            const effX0 = (ch.x0 ?? blk.x0) * s;
+            const effY0 = (ch.y0 ?? blk.y0) * s;
+            const effY1 = (ch.y1 ?? blk.y1) * s;
+            const effX1 = (ch.x1 ?? blk.x1) * s;
+            const sz    = (ch.size ?? blk.size) * s;
+
+            // Erase original text from ePdfC using background sampling from snapshot edges
+            // We draw a rect sampled from the snapshot's background area (border pixels of block)
+            if (E.snapshot) {
+                const snapCtx = ePdfC.getContext('2d');
+                // Sample color from just above the block (1px above y0)
+                const sampleY = Math.max(0, Math.round(effY0) - 2);
+                const sampleX = Math.round(effX0) + 2;
+                const px = snapCtx.getImageData(sampleX, sampleY, 1, 1).data;
+                // If bg is light (likely white/near-white), use it; else use white
+                const bgR = px[0], bgG = px[1], bgB = px[2];
+                snapCtx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
+                snapCtx.fillRect(effX0 - 1, effY0 - 1, (effX1 - effX0) + 2, (effY1 - effY0) + 2);
+            }
+
+            // Draw new text on eEditC (no background rect here, ePdfC already updated)
             ctx.font         = `${fontStyle(blk.font, blk.flags)}${sz}px ${fontFamily(blk.font)}`;
             ctx.fillStyle    = ch.color_hex ?? blk.color_hex;
             ctx.textBaseline = 'alphabetic';
-            const lines = (ch.text ?? blk.text).split('\n');
-            lines.forEach((ln, i) => ctx.fillText(ln, x0, y1 - (lines.length - 1 - i) * sz * 1.2));
+            const lines      = (ch.text ?? blk.text).split('\n');
+            lines.forEach((ln, i) => ctx.fillText(ln, effX0, effY1 - (lines.length - 1 - i) * sz * 1.2));
         });
     };
 
-    /* Render page with PDF.js */
+    /* ── Render page with PDF.js ── */
     const renderPage = async pg => {
         const page  = await E.pdfDoc.getPage(pg);
         const cont  = $('pdf-viewer-scroll');
-        const maxW  = cont.clientWidth - 24;
+        const maxW  = cont.clientWidth - 28;
         E.autoScale = Math.min(maxW / page.getViewport({ scale: 1 }).width, 2.5);
         const vp    = page.getViewport({ scale: E.scale });
+
         ePdfC.width = eEditC.width  = vp.width;
         ePdfC.height= eEditC.height = vp.height;
-        const wrap  = $('pdf-canvas-wrapper');
-        wrap.style.width  = eOvr.style.width  = vp.width  + 'px';
-        wrap.style.height = eOvr.style.height = vp.height + 'px';
-        await page.render({ canvasContext: ePdfC.getContext('2d'), viewport: vp }).promise;
+
+        // Sync wrapper so scroll container knows full size
+        const wrap = $('pdf-canvas-wrapper');
+        wrap.style.width  = vp.width  + 'px';
+        wrap.style.height = vp.height + 'px';
+        eOvr.style.width  = vp.width  + 'px';
+        eOvr.style.height = vp.height + 'px';
+
+        const ctx2d = ePdfC.getContext('2d');
+        ctx2d.clearRect(0, 0, vp.width, vp.height);
+        await page.render({ canvasContext: ctx2d, viewport: vp }).promise;
+
+        // Capture clean snapshot AFTER rendering (before any edits painted)
+        E.snapshot = ctx2d.getImageData(0, 0, vp.width, vp.height);
+
         ePageInd.textContent = `Página ${pg} de ${E.totalPages}`;
         eZoomLbl.textContent = Math.round(E.zoomLevel * 100) + '%';
         eBtnPrev.disabled = pg <= 1;
         eBtnNext.disabled = pg >= E.totalPages;
+
         drawOverlays(pg - 1);
-        redrawEdits(pg - 1);
+        redrawEdits(pg - 1);  // paint any existing changes
         hideProps();
     };
 
-    /* Overlay divs */
+    /* ── Overlay divs ── */
     const drawOverlays = pageIdx => {
         eOvr.innerHTML = '';
         const pg = E.pages[pageIdx]; if (!pg) return;
         const s  = E.scale;
         pg.blocks.forEach(blk => {
             const ch = E.changes[blk.id];
-            const x0 = (ch?.x0 ?? blk.x0) * s, y0 = (ch?.y0 ?? blk.y0) * s;
+            const x0 = (ch?.x0 ?? blk.x0) * s;
+            const y0 = (ch?.y0 ?? blk.y0) * s;
             const w  = ((ch?.x1 ?? blk.x1) - (ch?.x0 ?? blk.x0)) * s;
             const h  = ((ch?.y1 ?? blk.y1) - (ch?.y0 ?? blk.y0)) * s;
             const div = document.createElement('div');
-            div.className   = 'text-overlay' + (ch ? ' modified' : '') + (E.selectedId === blk.id ? ' selected' : '');
-            div.dataset.id  = blk.id;
+            div.className = 'text-overlay' + (ch ? ' modified' : '') + (E.selectedId === blk.id ? ' selected' : '');
+            div.dataset.id = blk.id;
             div.style.cssText = `left:${x0}px;top:${y0}px;width:${w}px;height:${h}px`;
             setupDrag(div, blk, pageIdx);
             eOvr.appendChild(div);
         });
     };
 
-    /* Drag-to-reposition */
+    /* ── Drag-to-reposition ── */
     const setupDrag = (div, blk, pageIdx) => {
         div.addEventListener('mousedown', e => {
             e.preventDefault();
@@ -213,59 +251,74 @@ document.addEventListener('DOMContentLoaded', () => {
             let moved = false;
             div.classList.add('dragging');
             const ch0 = E.changes[blk.id];
-            const bx0 = ch0?.x0 ?? blk.x0, by0 = ch0?.y0 ?? blk.y0;
-            const bx1 = ch0?.x1 ?? blk.x1, by1 = ch0?.y1 ?? blk.y1;
+            // Starting position for this drag gesture (already-dragged coords or original)
+            const startX0 = ch0?.x0 ?? blk.x0, startY0 = ch0?.y0 ?? blk.y0;
+            const startX1 = ch0?.x1 ?? blk.x1, startY1 = ch0?.y1 ?? blk.y1;
 
             const onMove = e => {
                 const dx = e.clientX - sx, dy = e.clientY - sy;
                 if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-                div.style.left = (bx0 * E.scale + dx) + 'px';
-                div.style.top  = (by0 * E.scale + dy) + 'px';
+                // Move overlay visually during drag
+                div.style.left = (startX0 * E.scale + dx) + 'px';
+                div.style.top  = (startY0 * E.scale + dy) + 'px';
             };
+
             const onUp = e => {
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup',   onUp);
                 div.classList.remove('dragging');
+
                 if (moved) {
-                    const dx = (e.clientX - sx) / E.scale, dy = (e.clientY - sy) / E.scale;
+                    const dx = (e.clientX - sx) / E.scale;
+                    const dy = (e.clientY - sy) / E.scale;
                     const ch = E.changes[blk.id] || { text: blk.text, color_hex: blk.color_hex, size: blk.size };
-                    ch.x0 = bx0 + dx; ch.y0 = by0 + dy;
-                    ch.x1 = bx1 + dx; ch.y1 = by1 + dy;
+                    ch.x0 = startX0 + dx; ch.y0 = startY0 + dy;
+                    ch.x1 = startX1 + dx; ch.y1 = startY1 + dy;
                     E.changes[blk.id] = ch;
-                    updateChUI(); drawOverlays(pageIdx); redrawEdits(pageIdx);
-                } else { selectBlock(blk, pageIdx); }
+                    updateChUI();
+                    // Redraw: snapshot restores clean page, then paints new positions only → no duplicate
+                    drawOverlays(pageIdx);
+                    redrawEdits(pageIdx);
+                } else {
+                    selectBlock(blk, pageIdx);
+                }
             };
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup',   onUp);
         });
     };
 
-    /* Select block → fill props panel */
+    /* ── Properties panel ── */
     const selectBlock = (blk, pageIdx) => {
         eOvr.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
         E.selectedId = blk.id;
         eOvr.querySelector(`[data-id="${blk.id}"]`)?.classList.add('selected');
         const ch = E.changes[blk.id];
-        eBlkLbl.textContent  = `Bloque · Pág. ${pageIdx + 1}`;
-        ePText.value         = ch?.text      ?? blk.text;
-        ePColor.value        = ch?.color_hex ?? blk.color_hex;
+        eBlkLbl.textContent    = `Bloque · Pág. ${pageIdx + 1}`;
+        ePText.value           = ch?.text      ?? blk.text;
+        ePColor.value          = ch?.color_hex ?? blk.color_hex;
         ePColorHex.textContent = ePColor.value;
-        ePSize.value         = ch?.size      ?? blk.size;
-        ePFont.textContent   = blk.font;
+        ePSize.value           = ch?.size      ?? blk.size;
+        ePFont.textContent     = blk.font;
         ePropsForm.dataset.id      = blk.id;
         ePropsForm.dataset.oText   = blk.text;
         ePropsForm.dataset.oColor  = blk.color_hex;
         ePropsForm.dataset.oSize   = blk.size;
         ePropsForm.dataset.pageIdx = pageIdx;
-        ePropsEmp.style.display = 'none';
+        ePropsEmp.style.display  = 'none';
         ePropsForm.style.display = 'block';
     };
 
-    const hideProps = () => { ePropsEmp.style.display = 'block'; ePropsForm.style.display = 'none'; E.selectedId = null; };
+    const hideProps = () => {
+        ePropsEmp.style.display  = 'block';
+        ePropsForm.style.display = 'none';
+        E.selectedId = null;
+    };
 
-    /* Live preview while typing */
+    /* ── Live preview ── */
     const livePreview = () => {
-        const id  = ePropsForm.dataset.id; if (!id || ePropsForm.style.display === 'none') return;
+        const id = ePropsForm.dataset.id;
+        if (!id || ePropsForm.style.display === 'none') return;
         const idx = +ePropsForm.dataset.pageIdx;
         const blk = E.pages[idx]?.blocks.find(b => b.id === id); if (!blk) return;
         const ch  = E.changes[id] || {};
@@ -280,15 +333,15 @@ document.addEventListener('DOMContentLoaded', () => {
     ePText.addEventListener('input',  livePreview);
     ePSize.addEventListener('input',  livePreview);
 
-    /* Apply button */
+    /* Apply */
     eBtnApp.addEventListener('click', () => {
         const id  = ePropsForm.dataset.id; if (!id) return;
         const idx = +ePropsForm.dataset.pageIdx;
         const blk = E.pages[idx].blocks.find(b => b.id === id);
         const t   = ePText.value, c = ePColor.value, s = parseFloat(ePSize.value) || blk.size;
         const ch  = E.changes[id] || {};
-        const posChanged = ch.x0 !== undefined;
-        if (t !== blk.text || c !== blk.color_hex || s !== blk.size || posChanged) {
+        const hasPosChange = ch.x0 !== undefined;
+        if (t !== blk.text || c !== blk.color_hex || s !== blk.size || hasPosChange) {
             ch.text = t; ch.color_hex = c; ch.size = s;
             E.changes[id] = ch;
         } else { delete E.changes[id]; }
@@ -296,15 +349,15 @@ document.addEventListener('DOMContentLoaded', () => {
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
     });
 
-    /* Reset button */
+    /* Reset */
     eBtnRst.addEventListener('click', () => {
         const id  = ePropsForm.dataset.id; if (!id) return;
         const idx = +ePropsForm.dataset.pageIdx;
         delete E.changes[id];
-        ePText.value = ePropsForm.dataset.oText;
-        ePColor.value = ePropsForm.dataset.oColor;
+        ePText.value           = ePropsForm.dataset.oText;
+        ePColor.value          = ePropsForm.dataset.oColor;
         ePColorHex.textContent = ePColor.value;
-        ePSize.value  = ePropsForm.dataset.oSize;
+        ePSize.value           = ePropsForm.dataset.oSize;
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
     });
@@ -312,41 +365,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateChUI = () => {
         const n = Object.keys(E.changes).length;
         eBtnExp.disabled = n === 0;
-        eChSum.style.display   = n ? 'block' : 'none';
-        eChCnt.textContent = `${n} bloque${n !== 1 ? 's' : ''} modificado${n !== 1 ? 's' : ''}`;
+        eChSum.style.display = n ? 'block' : 'none';
+        eChCnt.textContent   = `${n} bloque${n !== 1 ? 's' : ''} modificado${n !== 1 ? 's' : ''}`;
     };
 
-    /* Zoom */
+    /* ── Zoom ── */
     const ZOOM_STEP = 0.25, ZOOM_MIN = 0.25, ZOOM_MAX = 4.0;
-    eBtnZI.addEventListener('click', async () => { E.zoomLevel = Math.min(E.zoomLevel + ZOOM_STEP, ZOOM_MAX); await renderPage(E.currentPage); });
-    eBtnZO.addEventListener('click', async () => { E.zoomLevel = Math.max(E.zoomLevel - ZOOM_STEP, ZOOM_MIN); await renderPage(E.currentPage); });
-    eBtnZF.addEventListener('click', async () => { E.zoomLevel = 1.0; await renderPage(E.currentPage); });
+    const applyZoom = async lvl => {
+        E.zoomLevel = Math.min(Math.max(lvl, ZOOM_MIN), ZOOM_MAX);
+        await renderPage(E.currentPage);
+    };
+    eBtnZI.addEventListener('click', () => applyZoom(E.zoomLevel + ZOOM_STEP));
+    eBtnZO.addEventListener('click', () => applyZoom(E.zoomLevel - ZOOM_STEP));
+    eBtnZF.addEventListener('click', () => applyZoom(1.0));
 
-    /* Page nav */
-    eBtnPrev.addEventListener('click', async () => { if (E.currentPage > 1) { E.currentPage--; await renderPage(E.currentPage); } });
-    eBtnNext.addEventListener('click', async () => { if (E.currentPage < E.totalPages) { E.currentPage++; await renderPage(E.currentPage); } });
+    /* ── Page navigation ── */
+    eBtnPrev.addEventListener('click', async () => { if (E.currentPage > 1)              { E.currentPage--; await renderPage(E.currentPage); } });
+    eBtnNext.addEventListener('click', async () => { if (E.currentPage < E.totalPages)   { E.currentPage++; await renderPage(E.currentPage); } });
 
-    /* Close editor */
+    /* ── Close editor ── */
     eBtnClose.addEventListener('click', () => {
         if (Object.keys(E.changes).length && !confirm('¿Cerrar el editor? Se perderán los cambios no exportados.')) return;
         resetEditor();
     });
 
     const resetEditor = () => {
-        Object.assign(E, { file: null, pdfDoc: null, pages: [], changes: {}, selectedId: null, zoomLevel: 1.0 });
-        eWS.style.display   = 'none';
-        eDZ.style.display   = '';
-        eFL.style.display   = '';
-        eFL.innerHTML       = '';
-        eFI.value           = '';
-        eNameIn.value       = '';
-        eOvr.innerHTML      = '';
+        Object.assign(E, { file: null, pdfDoc: null, pages: [], changes: {}, selectedId: null, zoomLevel: 1.0, snapshot: null });
+        eWS.style.display = 'none'; eDZ.style.display = ''; eFL.style.display = '';
+        eFL.innerHTML = ''; eFI.value = ''; eNameIn.value = ''; eOvr.innerHTML = '';
         hideProps(); updateChUI();
     };
 
-    /* Drop zone */
+    /* ── Drop zone ── */
     ['dragenter','dragover','dragleave','drop'].forEach(ev => eDZ.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }));
-    ['dragenter','dragover'].forEach(ev => eDZ.addEventListener(ev, () => eDZ.classList.add('dragover')));
+    ['dragenter','dragover'].forEach(ev => eDZ.addEventListener(ev,  () => eDZ.classList.add('dragover')));
     ['dragleave','drop'].forEach(ev  => eDZ.addEventListener(ev,  () => eDZ.classList.remove('dragover')));
     eDZ.addEventListener('drop',   e  => handleEditorFile(e.dataTransfer.files[0]));
     eDZ.addEventListener('click',  () => eFI.click());
@@ -367,25 +419,36 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error(await res.text());
             E.pages = (await res.json()).pages || [];
             const total = E.pages.reduce((a, p) => a + p.blocks.length, 0);
-            if (!total) { hideModal(); return alert('⚠️ No se encontraron bloques de texto.\nEste PDF parece ser escaneado. Usa "PDF a Word (OCR)" primero.'); }
-            const buf     = await file.arrayBuffer();
-            E.pdfDoc      = await pdfjsLib.getDocument({ data: buf }).promise;
-            E.totalPages  = E.pdfDoc.numPages;
+            if (!total) {
+                hideModal();
+                return alert('⚠️ No se encontraron bloques de texto.\nEste PDF parece ser escaneado. Usa "PDF a Word (OCR)" primero.');
+            }
+            const buf    = await file.arrayBuffer();
+            E.pdfDoc     = await pdfjsLib.getDocument({ data: buf }).promise;
+            E.totalPages = E.pdfDoc.numPages;
             E.currentPage = 1; E.zoomLevel = 1.0; E.changes = {}; E.selectedId = null;
             eDZ.style.display = 'none'; eFL.style.display = 'none'; eWS.style.display = 'block';
-            eBlockInf.textContent = `${total} bloques de texto detectados`;
+            eBlockInf.textContent = `${total} bloques detectados`;
             updateChUI();
             await renderPage(1);
         } catch (e) { alert('Error al cargar: ' + e.message); } finally { hideModal(); }
     };
 
-    /* Export */
+    /* ── Export ── */
     eBtnExp.addEventListener('click', async () => {
         if (!E.file) return;
         const edits = [];
         E.pages.forEach(pg => pg.blocks.forEach(blk => {
             const ch = E.changes[blk.id]; if (!ch) return;
-            edits.push({ page: pg.page, x0: ch.x0 ?? blk.x0, y0: ch.y0 ?? blk.y0, x1: ch.x1 ?? blk.x1, y1: ch.y1 ?? blk.y1, font: blk.font, flags: blk.flags, size: ch.size ?? blk.size, color_hex: ch.color_hex ?? blk.color_hex, new_text: ch.text ?? blk.text });
+            edits.push({
+                page: pg.page,
+                x0: ch.x0 ?? blk.x0, y0: ch.y0 ?? blk.y0,
+                x1: ch.x1 ?? blk.x1, y1: ch.y1 ?? blk.y1,
+                font: blk.font, flags: blk.flags,
+                size: ch.size ?? blk.size,
+                color_hex: ch.color_hex ?? blk.color_hex,
+                new_text: ch.text ?? blk.text
+            });
         }));
         if (!edits.length) return alert('No hay cambios para exportar.');
         const cname = eNameIn.value.trim() || E.file.name.replace(/\.pdf$/i, '') + '_editado';
@@ -399,7 +462,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error(await res.text());
             const disp = res.headers.get('Content-Disposition') || '';
             const m    = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
-            const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: m ? m[1].replace(/['"]/g, '') : cname + '.pdf' });
+            const a    = Object.assign(document.createElement('a'), {
+                href: URL.createObjectURL(await res.blob()),
+                download: m ? m[1].replace(/['"]/g, '') : cname + '.pdf'
+            });
             document.body.appendChild(a); a.click(); a.remove();
         } catch (e) { alert('Error al exportar: ' + e.message); } finally { hideModal(); }
     });
