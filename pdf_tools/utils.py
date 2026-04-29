@@ -56,6 +56,11 @@ def ocr_pdf_to_word(pdf_path, output_path):
         section.right_margin = Inches(0.5)
 
     try:
+        # Verificar que tesseract esté instalado
+        import shutil
+        if not shutil.which("tesseract"):
+            raise Exception("El motor de OCR (Tesseract) no está instalado en el servidor.")
+
         page_count = get_page_count(pdf_path)
         print(f"Iniciando OCR de {page_count} páginas...")
 
@@ -93,40 +98,48 @@ def ocr_pdf_to_word(pdf_path, output_path):
 
 def convert_to_word_util(pdf_path, output_path, mode='auto'):
     """
-    Convierte un PDF a DOCX con estrategias avanzadas.
-    Estrategias:
-    1. Si mode='ocr' o (mode='auto' y es escaneado) -> ocr_pdf_to_word
-    2. Si mode='digital' -> pdf2docx (mejor que LibreOffice para Word)
-    3. Fallback -> LibreOffice
+    Convierte un PDF a DOCX con una cadena de fallbacks ultra-resistente.
+    1. OCR (si es necesario o solicitado)
+    2. pdf2docx (Mejor layout)
+    3. LibreOffice (Máxima compatibilidad)
     """
     import shutil
     from pdf2docx import Converter
 
-    # Determinamos si usamos OCR
+    # 1. ¿Usamos OCR?
     use_ocr = (mode == 'ocr') or (mode == 'auto' and is_pdf_scanned(pdf_path))
 
     if use_ocr:
-        print(f"Usando motor OCR para: {pdf_path}")
-        return ocr_pdf_to_word(pdf_path, output_path)
+        print(f"--- Iniciando modo OCR para: {pdf_path} ---")
+        try:
+            return ocr_pdf_to_word(pdf_path, output_path)
+        except Exception as e:
+            print(f"OCR falló: {e}. Intentando métodos digitales por si acaso...")
 
-    # ── Estrategia 1: pdf2docx (Mejor para layouts digitales) ──────────────────
+    # 2. Intentar pdf2docx (Estrategia principal para digital)
+    print(f"--- Intentando pdf2docx para: {pdf_path} ---")
     try:
         cv = Converter(pdf_path)
         cv.convert(output_path, start=0, end=None)
         cv.close()
-        if os.path.exists(output_path):
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             return
     except Exception as e:
-        print(f"pdf2docx falló: {e}. Probando LibreOffice...")
+        print(f"pdf2docx falló críticamente: {e}")
 
-    # ── Estrategia 2: LibreOffice (Fallback sólido) ───────────────────────────
+    # 3. Intentar LibreOffice (Último recurso, muy estable)
+    print(f"--- Intentando LibreOffice para: {pdf_path} ---")
     if shutil.which("libreoffice"):
         try:
             output_dir = os.path.dirname(output_path)
+            # Usar un HOME temporal para LibreOffice
+            env = os.environ.copy()
+            env['HOME'] = '/tmp'
+            
             subprocess.run(
                 ["libreoffice", "--headless", "--infilter=writer_pdf_import",
                  "--convert-to", "docx:MS Word 2007 XML", pdf_path, "--outdir", output_dir],
-                check=True, timeout=120
+                check=True, timeout=180, env=env
             )
             base_name = os.path.splitext(os.path.basename(pdf_path))[0]
             generated = os.path.join(output_dir, base_name + ".docx")
@@ -135,9 +148,14 @@ def convert_to_word_util(pdf_path, output_path, mode='auto'):
                     os.replace(generated, output_path)
                 return
         except Exception as e:
-            print(f"LibreOffice falló: {e}")
+            print(f"LibreOffice falló críticamente: {e}")
 
-    raise Exception("No se pudo convertir el documento. Intenta con el modo OCR forzado.")
+    # 4. Si todo falla, intentar OCR si no se intentó antes
+    if not use_ocr:
+        print("Todo lo digital falló. Intentando OCR como último recurso...")
+        return ocr_pdf_to_word(pdf_path, output_path)
+
+    raise Exception("Lo sentimos, no pudimos procesar este PDF. El archivo podría estar protegido por contraseña o dañado.")
 
 
 def extract_tables_util(pdf_path, output_path):
