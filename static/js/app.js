@@ -94,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
         autoScale: 1.0, zoomLevel: 1.0,
         get scale() { return this.autoScale * this.zoomLevel; },
         pages: [], changes: {}, selectedId: null,
-        snapshot: null   // ImageData of the clean rendered page
+        snapshot: null,   // ImageData of the clean rendered page
+        history: []       // Historial de estados (JSON strings de changes)
     };
 
     const $  = id => document.getElementById(id);
@@ -126,6 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ePFont     = $('prop-font-display');
     const eBtnApp    = $('btn-apply-block');
     const eBtnRst    = $('btn-reset-block');
+    const eBtnUndo   = $('btn-undo');
     const eChSum     = $('changes-summary');
     const eChCnt     = $('changes-count-text');
 
@@ -256,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.classList.remove('dragging');
 
                 if (moved) {
+                    saveHistoryState();
                     const dx = (e.clientX - sx) / E.scale;
                     const dy = (e.clientY - sy) / E.scale;
                     const ch = E.changes[blk.id] || { text: blk.text, color_hex: blk.color_hex, size: blk.size };
@@ -263,7 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ch.x1 = startX1 + dx; ch.y1 = startY1 + dy;
                     E.changes[blk.id] = ch;
                     updateChUI();
-                    // Redraw: snapshot restores clean page, then paints new positions only → no duplicate
                     drawOverlays(pageIdx);
                     redrawEdits(pageIdx);
                 } else {
@@ -328,10 +330,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const t   = ePText.value, c = ePColor.value, s = parseFloat(ePSize.value) || blk.size;
         const ch  = E.changes[id] || {};
         const hasPosChange = ch.x0 !== undefined;
+        
+        saveHistoryState();
         if (t !== blk.text || c !== blk.color_hex || s !== blk.size || hasPosChange) {
             ch.text = t; ch.color_hex = c; ch.size = s;
             E.changes[id] = ch;
-        } else { delete E.changes[id]; }
+        } else { 
+            delete E.changes[id]; 
+        }
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
     });
@@ -340,6 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
     eBtnRst.addEventListener('click', () => {
         const id  = ePropsForm.dataset.id; if (!id) return;
         const idx = +ePropsForm.dataset.pageIdx;
+        saveHistoryState();
         delete E.changes[id];
         ePText.value           = ePropsForm.dataset.oText;
         ePColor.value          = ePropsForm.dataset.oColor;
@@ -352,9 +359,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateChUI = () => {
         const n = Object.keys(E.changes).length;
         eBtnExp.disabled = n === 0;
+        eBtnUndo.disabled = E.history.length === 0;
         eChSum.style.display = n ? 'block' : 'none';
         eChCnt.textContent   = `${n} bloque${n !== 1 ? 's' : ''} modificado${n !== 1 ? 's' : ''}`;
     };
+
+    /* ── Historial (Undo) ── */
+    const saveHistoryState = () => {
+        E.history.push(JSON.stringify(E.changes));
+        if (E.history.length > 50) E.history.shift(); // Límite de 50 pasos
+        eBtnUndo.disabled = false;
+    };
+
+    const undo = () => {
+        if (!E.history.length) return;
+        E.changes = JSON.parse(E.history.pop());
+        updateChUI();
+        drawOverlays(E.currentPage - 1);
+        redrawEdits(E.currentPage - 1);
+        hideProps();
+    };
+
+    eBtnUndo.addEventListener('click', undo);
+    window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            undo();
+        }
+    });
 
     /* ── Zoom ── */
     const ZOOM_STEP = 0.25, ZOOM_MIN = 0.25, ZOOM_MAX = 4.0;
