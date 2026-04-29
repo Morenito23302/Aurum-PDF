@@ -66,6 +66,14 @@
                     <input type="file" id="fileput-word" accept="application/pdf" hidden>
                 </div>
                 <div id="file-list-word" class="file-list"></div>
+                <div class="word-options-panel">
+                    <label class="prop-label">Modo de Conversión</label>
+                    <select id="mode-word" class="input-name" style="margin-bottom: 15px;">
+                        <option value="auto">Auto (Detección Inteligente)</option>
+                        <option value="digital">Digital (Preservar tablas/diseño)</option>
+                        <option value="ocr">OCR (Para documentos escaneados)</option>
+                    </select>
+                </div>
                 <div class="action-bar">
                     <input type="text" id="name-word" placeholder="Nombre de archivo (sin .docx)" class="input-name">
                     <button id="btn-word" class="btn-primary aero-btn" disabled>Convertir a Word</button>
@@ -106,11 +114,11 @@
             <section id="anytopdf" class="tool-section">
                 <h2>Convertir a PDF</h2>
                 <p>Convierte documentos de Word, Excel, PowerPoint o Imágenes a formato PDF.</p>
-                <div class="drop-zone single-drop" id="drop-zone-anytopdf">
-                    <span class="drop-text">Arrastra un archivo aquí o <span class="browse">explora</span></span>
-                    <input type="file" id="fileput-anytopdf" accept=".docx,.doc,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,.bmp,.tiff" hidden>
+                <div class="drop-zone" id="drop-zone-anytopdf">
+                    <span class="drop-text">Arrastra archivos aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-anytopdf" accept=".docx,.doc,.xlsx,.xls,.ppt,.pptx,.jpg,.jpeg,.png,.bmp,.tiff,.pdf" multiple hidden>
                 </div>
-                <div id="file-list-anytopdf" class="file-list"></div>
+                <ul id="file-list-anytopdf" class="file-list sortable-list"></ul>
                 <div class="action-bar">
                     <input type="text" id="name-anytopdf" placeholder="Nombre de archivo (sin .pdf)" class="input-name">
                     <button id="btn-anytopdf" class="btn-primary aero-btn" disabled>A PDF</button>

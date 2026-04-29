@@ -45,26 +45,33 @@ def api_to_word(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
         custom_name = request.POST.get('custom_name', 'converted_document').strip()
+        mode = request.POST.get('mode', 'auto') # 'auto', 'digital', 'ocr'
+        
         if not custom_name:
             custom_name = 'converted_document'
             
         if not file:
-            return HttpResponseBadRequest("Need a PDF file.")
+            return JsonResponse({"error": "Se necesita un archivo PDF."}, status=400)
 
         fd, temp_pdf_path = tempfile.mkstemp(suffix='.pdf')
-        with os.fdopen(fd, 'wb') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
-
-        output_path = temp_pdf_path.replace('.pdf', '.docx')
-        
         try:
-            convert_to_word_util(temp_pdf_path, output_path)
+            with os.fdopen(fd, 'wb') as destination:
+                for chunk in file.chunks():
+                    destination.write(chunk)
+
+            output_path = temp_pdf_path.replace('.pdf', '.docx')
+            convert_to_word_util(temp_pdf_path, output_path, mode=mode)
+            
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.docx")
             return response
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
-    return HttpResponseBadRequest("Invalid request")
+            import traceback
+            print(traceback.format_exc())
+            return JsonResponse({"error": str(e)}, status=500)
+        finally:
+            # Limpieza básica (aunque FileResponse mantendrá el archivo abierto hasta que se envíe)
+            pass
+    return JsonResponse({"error": "Método no permitido"}, status=405)
 
 @csrf_exempt
 def api_extract_tables(request):
@@ -121,33 +128,33 @@ def api_extract_images(request):
 @csrf_exempt
 def api_any_to_pdf(request):
     if request.method == 'POST':
-        file = request.FILES.get('file')
+        files = request.FILES.getlist('files')
         custom_name = request.POST.get('custom_name', 'converted_document').strip()
         if not custom_name:
             custom_name = 'converted_document'
             
-        if not file:
-            return HttpResponseBadRequest("Need a file to convert.")
+        if not files:
+            return JsonResponse({"error": "Se necesita al menos un archivo para convertir."}, status=400)
 
-        _, original_ext = os.path.splitext(file.name)
-        original_ext = original_ext.lower()
-        
-        fd, temp_input_path = tempfile.mkstemp(suffix=original_ext)
-        with os.fdopen(fd, 'wb') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
-
-        output_path = temp_input_path.replace(original_ext, '.pdf')
-        if not output_path.endswith('.pdf'):
-            output_path += '.pdf'
-            
+        temp_dir = tempfile.mkdtemp()
+        file_paths = []
         try:
-            convert_to_pdf_util(temp_input_path, output_path, original_ext)
+            for i, f in enumerate(files):
+                _, ext = os.path.splitext(f.name)
+                path = os.path.join(temp_dir, f"input_{i}{ext}")
+                with open(path, 'wb+') as destination:
+                    for chunk in f.chunks():
+                        destination.write(chunk)
+                file_paths.append(path)
+
+            output_path = os.path.join(temp_dir, f"{custom_name}.pdf")
+            convert_to_pdf_util(file_paths, output_path)
+            
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
             return response
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
-    return HttpResponseBadRequest("Invalid request")
+            return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
 @csrf_exempt

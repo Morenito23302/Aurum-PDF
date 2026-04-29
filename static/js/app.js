@@ -64,19 +64,49 @@ document.addEventListener('DOMContentLoaded', () => {
         fi.addEventListener('change', e => add(e.target.files));
 
         btn.addEventListener('click', async () => {
-            showModal();
+            const statusMsgs = {
+                'word': 'Analizando y convirtiendo... esto puede tardar un poco si hay OCR.',
+                'anytopdf': 'Convirtiendo y uniendo documentos...',
+                'merge': 'Uniendo PDFs...',
+                'tables': 'Buscando tablas...',
+                'images': 'Extrayendo imágenes...'
+            };
+            showModal(statusMsgs[id] || 'Procesando...');
+            
             const fd = new FormData();
             if (multi) files.forEach(f => fd.append('files', f)); else fd.append('file', files[0]);
             if (name.value.trim()) fd.append('custom_name', name.value.trim());
+            
+            // Parámetros específicos por herramienta
+            if (id === 'word') {
+                const modeVal = document.getElementById('mode-word').value;
+                fd.append('mode', modeVal);
+            }
+
             try {
                 const res = await fetch(url, { method: 'POST', body: fd });
-                if (!res.ok) throw new Error(await res.text());
+                if (!res.ok) {
+                    let errText = await res.text();
+                    // Si recibimos HTML (error 500 de Django/Render), limpiar el mensaje
+                    if (errText.includes('<!DOCTYPE html>') || errText.includes('<html>')) {
+                        throw new Error('Error crítico en el servidor. El archivo podría ser demasiado grande o complejo.');
+                    }
+                    // Si es JSON con campo error, usarlo
+                    try {
+                        const jsonErr = JSON.parse(errText);
+                        if (jsonErr.error) errText = jsonErr.error;
+                    } catch(e) {}
+                    throw new Error(errText);
+                }
                 const disp = res.headers.get('Content-Disposition') || '';
                 const m    = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
                 const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: m ? m[1].replace(/['"]/g,'') : 'descarga' });
                 document.body.appendChild(a); a.click(); a.remove();
                 files = []; ui(); name.value = '';
-            } catch (e) { alert('Error: ' + e.message); } finally { hideModal(); }
+            } catch (e) { 
+                console.error(e);
+                alert('⚠️ AURUM PDF informa:\n' + e.message); 
+            } finally { hideModal(); }
         });
     };
 
@@ -84,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTool('word',     '/api/to-word/',         false);
     initTool('tables',   '/api/extract-tables/',  false);
     initTool('images',   '/api/extract-images/',  false);
-    initTool('anytopdf', '/api/any-to-pdf/',      false, ['.docx','.doc','.xlsx','.xls','.ppt','.pptx','.jpg','.jpeg','.png','.bmp','.tiff']);
+    initTool('anytopdf', '/api/any-to-pdf/',      true, ['.docx','.doc','.xlsx','.xls','.ppt','.pptx','.jpg','.jpeg','.png','.bmp','.tiff','.pdf']);
 
     /* ════════════════════════════════════════════════
        EDITOR PDF

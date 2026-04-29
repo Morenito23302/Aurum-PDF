@@ -21,60 +21,106 @@ def merge_pdfs_util(file_paths, output_path):
     result_pdf.save(output_path)
     result_pdf.close()
 
-def convert_to_word_util(pdf_path, output_path):
+def is_pdf_scanned(pdf_path):
     """
-    Convierte un PDF a DOCX conservando el layout exacto: texto, tablas, imágenes,
-    fuentes y estilos. Estrategia:
-    1. LibreOffice (mejor fidelidad, ya instalado en el servidor)
-    2. pdf2docx como fallback
+    Detecta si un PDF es escaneado (sin texto digital) o digital.
+    Devuelve True si es escaneado, False si tiene texto.
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        for page in doc:
+            if page.get_text("text").strip():
+                doc.close()
+                return False
+        doc.close()
+        return True
+    except Exception:
+        return True
+
+def ocr_pdf_to_word(pdf_path, output_path):
+    """
+    Convierte un PDF escaneado a Word usando OCR página por página.
+    """
+    from docx.shared import Inches
+    from pdf2image import convert_from_path
+    
+    doc_docx = Document()
+    
+    # Configurar márgenes mínimos para maximizar espacio
+    sections = doc_docx.sections
+    for section in sections:
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
+
+    try:
+        # Convertir páginas a imágenes (DPI 300 para buen OCR)
+        images = convert_from_path(pdf_path, dpi=300)
+        
+        for i, image in enumerate(images):
+            # 1. Ejecutar OCR para obtener el texto
+            text = pytesseract.image_to_string(image, lang='spa+eng')
+            
+            # 2. Añadir texto al Word
+            if text.strip():
+                doc_docx.add_paragraph(text)
+            
+            # 3. Añadir un salto de página si no es la última
+            if i < len(images) - 1:
+                doc_docx.add_page_break()
+                
+        doc_docx.save(output_path)
+    except Exception as e:
+        raise Exception(f"Fallo en el motor de OCR: {str(e)}")
+
+def convert_to_word_util(pdf_path, output_path, mode='auto'):
+    """
+    Convierte un PDF a DOCX con estrategias avanzadas.
+    Estrategias:
+    1. Si mode='ocr' o (mode='auto' y es escaneado) -> ocr_pdf_to_word
+    2. Si mode='digital' -> pdf2docx (mejor que LibreOffice para Word)
+    3. Fallback -> LibreOffice
     """
     import shutil
+    from pdf2docx import Converter
 
-    # ── Estrategia 1: LibreOffice ──────────────────────────────────────────────
-    if shutil.which("libreoffice"):
-        try:
-            output_dir = os.path.dirname(output_path)
+    # Determinamos si usamos OCR
+    use_ocr = (mode == 'ocr') or (mode == 'auto' and is_pdf_scanned(pdf_path))
 
-            result = subprocess.run(
-                [
-                    "libreoffice",
-                    "--headless",
-                    "--infilter=writer_pdf_import",
-                    "--convert-to", "docx:MS Word 2007 XML",
-                    pdf_path,
-                    "--outdir", output_dir,
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=120,
-            )
+    if use_ocr:
+        print(f"Usando motor OCR para: {pdf_path}")
+        return ocr_pdf_to_word(pdf_path, output_path)
 
-            # LibreOffice genera el archivo con el mismo nombre base del PDF
-            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-            generated = os.path.join(output_dir, base_name + ".docx")
-
-            if os.path.exists(generated):
-                if generated != output_path:
-                    os.replace(generated, output_path)
-                return  # ¡Exitoso!
-            else:
-                print("LibreOffice no generó el archivo esperado; usando fallback.")
-        except subprocess.TimeoutExpired:
-            print("LibreOffice tardó demasiado; usando fallback.")
-        except subprocess.CalledProcessError as e:
-            print(f"LibreOffice falló: {e.stderr.decode('utf-8', errors='ignore')}; usando fallback.")
-        except Exception as e:
-            print(f"Error inesperado con LibreOffice: {e}; usando fallback.")
-
-    # ── Estrategia 2: pdf2docx ────────────────────────────────────────────────
+    # ── Estrategia 1: pdf2docx (Mejor para layouts digitales) ──────────────────
     try:
-        from pdf2docx import Converter
         cv = Converter(pdf_path)
         cv.convert(output_path, start=0, end=None)
         cv.close()
+        if os.path.exists(output_path):
+            return
     except Exception as e:
-        raise Exception(f"Todos los métodos de conversión fallaron: {e}")
+        print(f"pdf2docx falló: {e}. Probando LibreOffice...")
+
+    # ── Estrategia 2: LibreOffice (Fallback sólido) ───────────────────────────
+    if shutil.which("libreoffice"):
+        try:
+            output_dir = os.path.dirname(output_path)
+            subprocess.run(
+                ["libreoffice", "--headless", "--infilter=writer_pdf_import",
+                 "--convert-to", "docx:MS Word 2007 XML", pdf_path, "--outdir", output_dir],
+                check=True, timeout=120
+            )
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            generated = os.path.join(output_dir, base_name + ".docx")
+            if os.path.exists(generated):
+                if generated != output_path:
+                    os.replace(generated, output_path)
+                return
+        except Exception as e:
+            print(f"LibreOffice falló: {e}")
+
+    raise Exception("No se pudo convertir el documento. Intenta con el modo OCR forzado.")
 
 
 def extract_tables_util(pdf_path, output_path):
@@ -115,30 +161,52 @@ def extract_images_util(pdf_path, zip_output_path):
                 zipf.writestr(image_filename, image_bytes)
     pdf_document.close()
 
-def convert_to_pdf_util(input_path, output_path, ext):
-    ext = ext.lower()
-    if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
-        image = Image.open(input_path)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        image.save(output_path, "PDF", resolution=100.0)
-    elif ext in ['.docx', '.doc', '.xlsx', '.xls', '.ppt', '.pptx']:
-        output_dir = os.path.dirname(output_path)
-        try:
-            subprocess.run([
-                'libreoffice', '--headless', '--convert-to', 'pdf',
-                input_path, '--outdir', output_dir
-            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            base_name = os.path.splitext(os.path.basename(input_path))[0]
-            generated_pdf = os.path.join(output_dir, base_name + '.pdf')
-            if os.path.exists(generated_pdf) and generated_pdf != output_path:
-                os.rename(generated_pdf, output_path)
-        except subprocess.CalledProcessError as e:
-            raise Exception(f"Fallo en conversión de documento: {e.stderr.decode('utf-8', errors='ignore')}")
-        except FileNotFoundError:
-            raise Exception("LibreOffice no está instalado.")
-    else:
-        raise ValueError(f"Formato no soportado: {ext}")
+def convert_to_pdf_util(input_paths, output_path):
+    """
+    Convierte uno o varios archivos (imágenes o documentos) a un único PDF.
+    """
+    temp_pdfs = []
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
+        for idx, input_path in enumerate(input_paths):
+            ext = os.path.splitext(input_path)[1].lower()
+            temp_out = os.path.join(temp_dir, f"part_{idx}.pdf")
+            
+            if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']:
+                image = Image.open(input_path)
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                image.save(temp_out, "PDF", resolution=100.0)
+                temp_pdfs.append(temp_out)
+            elif ext in ['.docx', '.doc', '.xlsx', '.xls', '.ppt', '.pptx']:
+                try:
+                    subprocess.run([
+                        'libreoffice', '--headless', '--convert-to', 'pdf',
+                        input_path, '--outdir', temp_dir
+                    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    
+                    base_name = os.path.splitext(os.path.basename(input_path))[0]
+                    generated_pdf = os.path.join(temp_dir, base_name + '.pdf')
+                    
+                    if os.path.exists(generated_pdf):
+                        os.rename(generated_pdf, temp_out)
+                        temp_pdfs.append(temp_out)
+                except Exception as e:
+                    print(f"Error convirtiendo {input_path} con LibreOffice: {e}")
+            elif ext == '.pdf':
+                # Si ya es PDF, solo lo añadimos para unir
+                temp_pdfs.append(input_path)
+
+        if not temp_pdfs:
+            raise Exception("No se pudo convertir ninguno de los archivos seleccionados.")
+
+        # Unir todos los PDFs generados
+        merge_pdfs_util(temp_pdfs, output_path)
+        
+    finally:
+        # Limpieza (opcional aquí si tempfile maneja el ciclo, pero mejor ser explícito)
+        pass
 
 
 def extract_text_blocks_util(pdf_path):
