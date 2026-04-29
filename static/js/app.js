@@ -87,9 +87,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(url, { method: 'POST', body: fd });
                 if (!res.ok) {
                     let errText = await res.text();
+                    
+                    // Si el cuerpo está vacío, usar el status text
+                    if (!errText.trim()) errText = res.statusText || 'Error desconocido en el servidor.';
+
                     // Si recibimos HTML (error 500 de Django/Render), limpiar el mensaje
                     if (errText.includes('<!DOCTYPE html>') || errText.includes('<html>')) {
-                        throw new Error('Error crítico en el servidor. El archivo podría ser demasiado grande o complejo.');
+                        throw new Error('Error crítico en el servidor (500). El archivo podría ser demasiado pesado para la memoria del servidor o hubo un tiempo de espera agotado.');
                     }
                     // Si es JSON con campo error, usarlo
                     try {

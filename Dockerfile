@@ -33,5 +33,5 @@ RUN python manage.py collectstatic --noinput
 # Exponer el puerto
 EXPOSE 8000
 
-# Ejecutar Gunicorn
-CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# Ejecutar Gunicorn con mayor timeout para procesos largos como OCR
+CMD ["gunicorn", "core.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "600"]

@@ -66,7 +66,8 @@ def api_to_word(request):
             return response
         except Exception as e:
             import traceback
-            print(traceback.format_exc())
+            error_msg = traceback.format_exc()
+            print(f"--- ERROR EN PDF A WORD ---\n{error_msg}")
             return JsonResponse({"error": str(e)}, status=500)
         finally:
             # Limpieza básica (aunque FileResponse mantendrá el archivo abierto hasta que se envíe)

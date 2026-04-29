@@ -39,14 +39,15 @@ def is_pdf_scanned(pdf_path):
 
 def ocr_pdf_to_word(pdf_path, output_path):
     """
-    Convierte un PDF escaneado a Word usando OCR página por página.
+    Convierte un PDF escaneado a Word usando OCR página por página de forma eficiente.
+    Optimizado para servidores con poca RAM (como Render Free).
     """
     from docx.shared import Inches
-    from pdf2image import convert_from_path
+    from pdf2image import convert_from_path, get_page_count
     
     doc_docx = Document()
     
-    # Configurar márgenes mínimos para maximizar espacio
+    # Configurar márgenes
     sections = doc_docx.sections
     for section in sections:
         section.top_margin = Inches(0.5)
@@ -55,23 +56,39 @@ def ocr_pdf_to_word(pdf_path, output_path):
         section.right_margin = Inches(0.5)
 
     try:
-        # Convertir páginas a imágenes (DPI 300 para buen OCR)
-        images = convert_from_path(pdf_path, dpi=300)
-        
-        for i, image in enumerate(images):
-            # 1. Ejecutar OCR para obtener el texto
+        page_count = get_page_count(pdf_path)
+        print(f"Iniciando OCR de {page_count} páginas...")
+
+        for i in range(1, page_count + 1):
+            # Convertir una sola página a la vez para ahorrar RAM
+            # Bajamos a 200 DPI (equilibrio entre velocidad/memoria y precisión)
+            pages = convert_from_path(pdf_path, dpi=200, first_page=i, last_page=i)
+            if not pages:
+                continue
+            
+            image = pages[0]
+            
+            # 1. Ejecutar OCR
             text = pytesseract.image_to_string(image, lang='spa+eng')
             
-            # 2. Añadir texto al Word
+            # 2. Añadir texto
             if text.strip():
                 doc_docx.add_paragraph(text)
+            else:
+                # Si no hay texto, poner un aviso o dejar espacio
+                doc_docx.add_paragraph(f"[Página {i} sin texto detectable]")
             
-            # 3. Añadir un salto de página si no es la última
-            if i < len(images) - 1:
+            # 3. Salto de página
+            if i < page_count:
                 doc_docx.add_page_break()
+            
+            # Liberar memoria de la imagen explícitamente
+            del image
+            del pages
                 
         doc_docx.save(output_path)
     except Exception as e:
+        print(f"Error en ocr_pdf_to_word: {str(e)}")
         raise Exception(f"Fallo en el motor de OCR: {str(e)}")
 
 def convert_to_word_util(pdf_path, output_path, mode='auto'):
