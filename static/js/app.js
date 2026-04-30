@@ -68,7 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'word': 'Analizando y convirtiendo... esto puede tardar un poco si hay OCR.',
                 'anytopdf': 'Convirtiendo y uniendo documentos...',
                 'merge': 'Uniendo PDFs...',
-                'tables': 'Buscando tablas...',
+                'excel': 'Extrayendo a Excel...',
+                'unlock': 'Desbloqueando documento...',
                 'images': 'Extrayendo imágenes...'
             };
             showModal(statusMsgs[id] || 'Procesando...');
@@ -81,6 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (id === 'word') {
                 const modeVal = document.getElementById('mode-word').value;
                 fd.append('mode', modeVal);
+            }
+            if (id === 'unlock') {
+                const passVal = document.getElementById('pass-unlock').value;
+                fd.append('password', passVal);
             }
 
             try {
@@ -103,8 +108,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(errText);
                 }
                 const disp = res.headers.get('Content-Disposition') || '';
-                const m    = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
-                const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: m ? m[1].replace(/['"]/g,'') : 'descarga' });
+                let filename = 'descarga';
+                const utf8Match = /filename\*=utf-8''([^;]+)/i.exec(disp);
+                if (utf8Match) {
+                    filename = decodeURIComponent(utf8Match[1]);
+                } else {
+                    const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+                    if (m) filename = m[1].replace(/['"]/g, '');
+                }
+
+                const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: filename });
                 document.body.appendChild(a); a.click(); a.remove();
                 files = []; ui(); name.value = '';
             } catch (e) { 
@@ -116,9 +129,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initTool('merge',    '/api/merge/',          true);
     initTool('word',     '/api/to-word/',         false);
-    initTool('tables',   '/api/extract-tables/',  false);
+    initTool('excel',    '/api/to-excel/',        false);
     initTool('images',   '/api/extract-images/',  false);
     initTool('anytopdf', '/api/any-to-pdf/',      true, ['.docx','.doc','.xlsx','.xls','.ppt','.pptx','.jpg','.jpeg','.png','.bmp','.tiff','.pdf']);
+    initTool('unlock',   '/api/unlock/',          false);
 
     /* ════════════════════════════════════════════════
        EDITOR PDF
@@ -517,10 +531,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/edit-pdf/export/', { method: 'POST', body: fd });
             if (!res.ok) throw new Error(await res.text());
             const disp = res.headers.get('Content-Disposition') || '';
-            const m    = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
-            const a    = Object.assign(document.createElement('a'), {
+            let filename = cname + '.pdf';
+            const utf8Match = /filename\*=utf-8''([^;]+)/i.exec(disp);
+            if (utf8Match) {
+                filename = decodeURIComponent(utf8Match[1]);
+            } else {
+                const m = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+                if (m) filename = m[1].replace(/['"]/g, '');
+            }
+            const a = Object.assign(document.createElement('a'), {
                 href: URL.createObjectURL(await res.blob()),
-                download: m ? m[1].replace(/['"]/g, '') : cname + '.pdf'
+                download: filename
             });
             document.body.appendChild(a); a.click(); a.remove();
         } catch (e) { alert('Error al exportar: ' + e.message); } finally { hideModal(); }

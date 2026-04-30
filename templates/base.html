@@ -34,9 +34,10 @@
         <nav class="glass-nav">
             <button class="nav-btn active" data-target="merge">Unir PDFs</button>
             <button class="nav-btn" data-target="word">PDF a Word (OCR)</button>
-            <button class="nav-btn" data-target="tables">Extraer Tablas</button>
+            <button class="nav-btn" data-target="excel">PDF a Excel</button>
             <button class="nav-btn" data-target="images">Extraer Imágenes</button>
             <button class="nav-btn" data-target="anytopdf">Convertir a PDF</button>
+            <button class="nav-btn" data-target="unlock">Desbloquear PDF</button>
             <button class="nav-btn nav-btn-editor" data-target="editpdf">Editar PDF</button>
         </nav>
 
@@ -80,18 +81,18 @@
                 </div>
             </section>
 
-            <!-- ─── Extraer Tablas ─── -->
-            <section id="tables" class="tool-section">
-                <h2>Extraer Tablas a Excel</h2>
-                <p>Detecta y exporta todas las tablas del documento a formato .xlsx.</p>
-                <div class="drop-zone single-drop" id="drop-zone-tables">
+            <!-- ─── PDF a Excel ─── -->
+            <section id="excel" class="tool-section">
+                <h2>PDF a Excel</h2>
+                <p>Extrae tablas y texto organizado del documento a formato .xlsx.</p>
+                <div class="drop-zone single-drop" id="drop-zone-excel">
                     <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
-                    <input type="file" id="fileput-tables" accept="application/pdf" hidden>
+                    <input type="file" id="fileput-excel" accept="application/pdf" hidden>
                 </div>
-                <div id="file-list-tables" class="file-list"></div>
+                <div id="file-list-excel" class="file-list"></div>
                 <div class="action-bar">
-                    <input type="text" id="name-tables" placeholder="Nombre de archivo (sin .xlsx)" class="input-name">
-                    <button id="btn-tables" class="btn-primary aero-btn" disabled>Exportar a Excel</button>
+                    <input type="text" id="name-excel" placeholder="Nombre de archivo (sin .xlsx)" class="input-name">
+                    <button id="btn-excel" class="btn-primary aero-btn" disabled>Exportar a Excel</button>
                 </div>
             </section>
 
@@ -122,6 +123,25 @@
                 <div class="action-bar">
                     <input type="text" id="name-anytopdf" placeholder="Nombre de archivo (sin .pdf)" class="input-name">
                     <button id="btn-anytopdf" class="btn-primary aero-btn" disabled>A PDF</button>
+                </div>
+            </section>
+
+            <!-- ─── Desbloquear PDF ─── -->
+            <section id="unlock" class="tool-section">
+                <h2>Desbloquear PDF</h2>
+                <p>Elimina restricciones y contraseñas de tus PDFs (si tiene contraseña de apertura, introdúcela).</p>
+                <div class="drop-zone single-drop" id="drop-zone-unlock">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-unlock" accept="application/pdf" hidden>
+                </div>
+                <div id="file-list-unlock" class="file-list"></div>
+                <div class="word-options-panel">
+                    <label class="prop-label">Contraseña (opcional)</label>
+                    <input type="password" id="pass-unlock" class="input-name" placeholder="Dejar en blanco si sólo tiene restricciones">
+                </div>
+                <div class="action-bar">
+                    <input type="text" id="name-unlock" placeholder="Nombre de archivo (sin .pdf)" class="input-name">
+                    <button id="btn-unlock" class="btn-primary aero-btn" disabled>Desbloquear PDF</button>
                 </div>
             </section>
 

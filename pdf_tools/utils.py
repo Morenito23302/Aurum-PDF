@@ -126,10 +126,14 @@ def convert_to_word_util(pdf_path, output_path, mode='auto'):
             return
     except Exception as e:
         print(f"pdf2docx falló críticamente: {e}")
+        # Limpiar si dejó archivo corrupto
+        if os.path.exists(output_path):
+            os.remove(output_path)
 
     # 3. Intentar LibreOffice (Último recurso, muy estable)
     print(f"--- Intentando LibreOffice para: {pdf_path} ---")
-    if shutil.which("libreoffice"):
+    soffice_path = shutil.which("libreoffice") or shutil.which("soffice")
+    if soffice_path:
         try:
             output_dir = os.path.dirname(output_path)
             # Usar un HOME temporal para LibreOffice
@@ -137,7 +141,7 @@ def convert_to_word_util(pdf_path, output_path, mode='auto'):
             env['HOME'] = '/tmp'
             
             subprocess.run(
-                ["libreoffice", "--headless", "--infilter=writer_pdf_import",
+                [soffice_path, "--headless", "--infilter=writer_pdf_import",
                  "--convert-to", "docx:MS Word 2007 XML", pdf_path, "--outdir", output_dir],
                 check=True, timeout=180, env=env
             )
@@ -155,31 +159,42 @@ def convert_to_word_util(pdf_path, output_path, mode='auto'):
         print("Todo lo digital falló. Intentando OCR como último recurso...")
         return ocr_pdf_to_word(pdf_path, output_path)
 
-    raise Exception("Lo sentimos, no pudimos procesar este PDF. El archivo podría estar protegido por contraseña o dañado.")
+    raise Exception("Lo sentimos, no pudimos procesar este PDF. El archivo podría estar protegido o ser incompatible con los conversores actuales.")
 
 
-def extract_tables_util(pdf_path, output_path):
-    # Usar pdfplumber y pandas
+def convert_to_excel_util(pdf_path, output_path):
+    # Usar pdfplumber y pandas para volcar texto o tablas a excel
     with pdfplumber.open(pdf_path) as pdf:
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            tables_found = False
+            data_found = False
             for i, page in enumerate(pdf.pages):
                 tables = page.extract_tables()
-                for j, table in enumerate(tables):
-                    if not table:
-                        continue
-                    tables_found = True
-                    df = pd.DataFrame(table[1:], columns=table[0])
-                    # Limpiar encabezados si son nulos
-                    if len(df.columns) > 0:
-                        df.columns = [str(col) if col else f"Col_{c_idx}" for c_idx, col in enumerate(df.columns)]
-                    # Guardar cada tabla en una hoja
-                    sheet_name = f"Tabla_{i+1}_{j+1}"
-                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                if tables:
+                    for j, table in enumerate(tables):
+                        if not table:
+                            continue
+                        data_found = True
+                        df = pd.DataFrame(table[1:], columns=table[0])
+                        # Limpiar encabezados si son nulos
+                        if len(df.columns) > 0:
+                            df.columns = [str(col) if col else f"Col_{c_idx}" for c_idx, col in enumerate(df.columns)]
+                        sheet_name = f"Pag{i+1}_Tab{j+1}"[:31]
+                        df.to_excel(writer, sheet_name=sheet_name, index=False)
+                else:
+                    # Extraer texto si no hay tablas
+                    text = page.extract_text()
+                    if text and text.strip():
+                        data_found = True
+                        # Tratar de separar en columnas por espacios múltiples o simplemente dejar líneas
+                        lines = [line.split() for line in text.split('\n') if line.strip()]
+                        if lines:
+                            df = pd.DataFrame(lines)
+                            sheet_name = f"Pag{i+1}_Texto"[:31]
+                            df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
             
-            if not tables_found:
-                # Escribir hoja vacía si no hay tablas
-                pd.DataFrame([["No se encontraron tablas"]]).to_excel(writer, index=False)
+            if not data_found:
+                # Escribir hoja vacía si no hay nada
+                pd.DataFrame([["No se encontraron datos tabulares o texto"]]).to_excel(writer, index=False, header=False)
 
 def extract_images_util(pdf_path, zip_output_path):
     pdf_document = fitz.open(pdf_path)
@@ -391,4 +406,15 @@ def apply_text_edits_util(pdf_path, output_path, edits):
             )
 
     doc.save(output_path, garbage=4, deflate=True, clean=True)
+    doc.close()
+
+
+def unlock_pdf_util(pdf_path, output_path, password=""):
+    """Elimina contraseñas y restricciones de un PDF usando PyMuPDF."""
+    doc = fitz.open(pdf_path)
+    if doc.is_encrypted:
+        if not doc.authenticate(password):
+            doc.close()
+            raise Exception("La contraseña es incorrecta o el documento está fuertemente cifrado y requiere una contraseña de apertura válida.")
+    doc.save(output_path)
     doc.close()

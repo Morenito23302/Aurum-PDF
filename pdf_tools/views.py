@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 import json as _json
-from .utils import merge_pdfs_util, convert_to_word_util, extract_tables_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util
+from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, unlock_pdf_util
 
 def index(request):
     return render(request, 'base.html')
@@ -75,12 +75,12 @@ def api_to_word(request):
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 @csrf_exempt
-def api_extract_tables(request):
+def api_to_excel(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
-        custom_name = request.POST.get('custom_name', 'extracted_tables').strip()
+        custom_name = request.POST.get('custom_name', 'document_excel').strip()
         if not custom_name:
-            custom_name = 'extracted_tables'
+            custom_name = 'document_excel'
             
         if not file:
             return HttpResponseBadRequest("Need a PDF file.")
@@ -93,7 +93,7 @@ def api_extract_tables(request):
         output_path = temp_pdf_path.replace('.pdf', '.xlsx')
         
         try:
-            extract_tables_util(temp_pdf_path, output_path)
+            convert_to_excel_util(temp_pdf_path, output_path)
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.xlsx")
             return response
         except Exception as e:
@@ -221,4 +221,31 @@ def api_edit_export_pdf(request):
                 os.unlink(temp_in)
             except Exception:
                 pass
+    return HttpResponseBadRequest("Invalid request")
+
+@csrf_exempt
+def api_unlock_pdf(request):
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        password = request.POST.get('password', '')
+        custom_name = request.POST.get('custom_name', 'unlocked_document').strip()
+        if not custom_name:
+            custom_name = 'unlocked_document'
+            
+        if not file:
+            return HttpResponseBadRequest("Se necesita un archivo PDF.")
+
+        fd, temp_pdf_path = tempfile.mkstemp(suffix='.pdf')
+        with os.fdopen(fd, 'wb') as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+
+        output_path = temp_pdf_path.replace('.pdf', '_unlocked.pdf')
+        
+        try:
+            unlock_pdf_util(temp_pdf_path, output_path, password)
+            response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
+            return response
+        except Exception as e:
+            return HttpResponseBadRequest(str(e))
     return HttpResponseBadRequest("Invalid request")

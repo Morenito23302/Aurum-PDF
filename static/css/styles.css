@@ -721,3 +721,107 @@ input:checked + .slider:before { transform: translateX(26px); }
     transform: translateY(-1px);
 }
 
+/* ══════════════════════════════════════════════
+   RESPONSIVIDAD Y AJUSTES MÓVILES
+══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    /* Cabecera */
+    .glass-header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .logo-container h1 {
+        font-size: 1.5rem;
+    }
+    
+    /* Contenedor principal */
+    .container {
+        margin: 1.5rem auto;
+        padding: 0 15px;
+    }
+    
+    /* Panel principal */
+    .glass-panel {
+        padding: 20px;
+    }
+    
+    /* Navegación */
+    .glass-nav {
+        padding: 8px;
+        /* Permitir scroll más suave en móviles */
+        -webkit-overflow-scrolling: touch;
+    }
+    .nav-btn {
+        padding: 8px 15px;
+        font-size: 0.9rem;
+    }
+    
+    /* Listas de archivos */
+    .file-list li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .file-list li > span {
+        word-break: break-all;
+    }
+    .remove-file {
+        align-self: flex-end;
+        width: 100%;
+        padding: 8px;
+    }
+    
+    /* Barra de acciones (Input + Botón) */
+    .action-bar {
+        flex-direction: column;
+        gap: 10px;
+    }
+    .input-name, .aero-btn {
+        width: 100%;
+    }
+    
+    /* Toolbar del Editor PDF */
+    .editor-toolbar {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+    .toolbar-sep {
+        display: none;
+    }
+    .toolbar-btn {
+        flex: 1 1 auto;
+        text-align: center;
+    }
+    #btn-close-editor {
+        width: 100%;
+        margin-top: 5px;
+    }
+    
+    /* Propiedades del editor */
+    .glass-props {
+        position: static; /* Quitar sticky en móviles para que no ocupe demasiado o cause problemas de scroll */
+        margin-top: 20px;
+    }
+    .color-row {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 480px) {
+    .drop-zone {
+        padding: 20px 10px;
+    }
+    .drop-text {
+        font-size: 1rem;
+    }
+    .tool-section h2 {
+        font-size: 1.4rem;
+    }
+    .aero-modal {
+        width: 90%;
+        padding: 25px 20px;
+    }
+}
+
