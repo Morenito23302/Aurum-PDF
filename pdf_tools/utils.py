@@ -409,12 +409,21 @@ def apply_text_edits_util(pdf_path, output_path, edits):
     doc.close()
 
 
-def unlock_pdf_util(pdf_path, output_path, password=""):
-    """Elimina contraseñas y restricciones de un PDF usando PyMuPDF."""
+def protect_unlock_pdf_util(pdf_path, output_path, password="", mode="unlock"):
+    """Elimina contraseñas y restricciones, o añade una contraseña al PDF usando PyMuPDF."""
     doc = fitz.open(pdf_path)
-    if doc.is_encrypted:
-        if not doc.authenticate(password):
+    if mode == "unlock":
+        if doc.is_encrypted:
+            if not doc.authenticate(password):
+                doc.close()
+                raise Exception("La contraseña es incorrecta o el documento está fuertemente cifrado y requiere una contraseña de apertura válida.")
+        doc.save(output_path)
+    else:  # mode == "lock"
+        if not password:
             doc.close()
-            raise Exception("La contraseña es incorrecta o el documento está fuertemente cifrado y requiere una contraseña de apertura válida.")
-    doc.save(output_path)
+            raise Exception("Se requiere una contraseña para proteger el PDF.")
+        if doc.is_encrypted:
+            if not doc.authenticate(""):
+                doc.authenticate(password)
+        doc.save(output_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=password, user_pw=password)
     doc.close()

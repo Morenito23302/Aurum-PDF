@@ -4,7 +4,67 @@ from django.shortcuts import render
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 import json as _json
-from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, unlock_pdf_util
+from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, protect_unlock_pdf_util
+
+def index(request):
+    return render(request, 'base.html')
+
+@csrf_exempt
+def api_merge_pdfs(request):
+    if request.method == 'POST':
+        files = request.FILES.getlist('files')
+        custom_name = request.POST.get('custom_name', 'merged_document').strip()
+        if not custom_name:
+            custom_name = 'merged_document'
+            
+        if not files or len(files) < 2:
+            return HttpResponseBadRequest("Need at least 2 PDF files.")
+
+        temp_dir = tempfile.mkdtemp()
+        file_paths = []
+        for i, f in enumerate(files):
+            # Preserving order sent by JS FormData
+            path = os.path.join(temp_dir, f"{i}_{f.name}")
+            with open(path, 'wb+') as destination:
+                for chunk in f.chunks():
+                    destination.write(chunk)
+            file_paths.append(path)
+
+        output_path = os.path.join(temp_dir, f"{custom_name}.pdf")
+        
+        try:
+            merge_pdfs_util(file_paths, output_path)
+            response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
+            return response
+        except Exception as e:
+            return HttpResponseBadRequest(str(e))
+    return HttpResponseBadRequest("Invalid request")
+
+@csrf_exempt
+def api_to_word(request):
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        custom_name = request.POST.get('custom_name', 'converted_document').strip()
+        mode = request.POST.get('mode', 'auto') # 'auto', 'digital', 'ocr'
+        
+        if not custom_name:
+            custom_name = 'converted_document'
+            
+        if not file:
+            return JsonResponse({"error": "Se necesita un archivo PDF."}, status=400)
+
+        fd, temp_pdf_path = tempfile.mkstemp(suffix='.pdf')
+        try:
+            with os.fdopen(fd, 'wb') as destination:
+                for chunk in file.chunks():
+                    destination.write(chunk)
+import os
+import tempfile
+from django.shortcuts import render
+from django.http import FileResponse, JsonResponse, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
+import json as _json
+from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, protect_unlock_pdf_util
 
 def index(request):
     return render(request, 'base.html')
@@ -68,7 +128,7 @@ def api_to_word(request):
             import traceback
             error_msg = traceback.format_exc()
             print(f"--- ERROR EN PDF A WORD ---\n{error_msg}")
-            return JsonResponse({"error": str(e)}, status=500)
+            return JsonResponse({"error": str(e)}, status=400)
         finally:
             # Limpieza básica (aunque FileResponse mantendrá el archivo abierto hasta que se envíe)
             pass
@@ -97,8 +157,10 @@ def api_to_excel(request):
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.xlsx")
             return response
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
-    return HttpResponseBadRequest("Invalid request")
+            import traceback
+            print(f"--- ERROR EN PDF A EXCEL ---\n{traceback.format_exc()}")
+            return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"error": "Invalid request"}, status=400)
 
 @csrf_exempt
 def api_extract_images(request):
@@ -228,24 +290,25 @@ def api_unlock_pdf(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
         password = request.POST.get('password', '')
-        custom_name = request.POST.get('custom_name', 'unlocked_document').strip()
+        mode = request.POST.get('mode', 'unlock')
+        custom_name = request.POST.get('custom_name', 'document_protected').strip()
         if not custom_name:
-            custom_name = 'unlocked_document'
+            custom_name = 'document_protected'
             
         if not file:
-            return HttpResponseBadRequest("Se necesita un archivo PDF.")
+            return JsonResponse({"error": "Se necesita un archivo PDF."}, status=400)
 
         fd, temp_pdf_path = tempfile.mkstemp(suffix='.pdf')
         with os.fdopen(fd, 'wb') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
 
-        output_path = temp_pdf_path.replace('.pdf', '_unlocked.pdf')
+        output_path = temp_pdf_path.replace('.pdf', '_processed.pdf')
         
         try:
-            unlock_pdf_util(temp_pdf_path, output_path, password)
+            protect_unlock_pdf_util(temp_pdf_path, output_path, password, mode)
             response = FileResponse(open(output_path, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
             return response
         except Exception as e:
-            return HttpResponseBadRequest(str(e))
-    return HttpResponseBadRequest("Invalid request")
+            return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"error": "Invalid request"}, status=400)

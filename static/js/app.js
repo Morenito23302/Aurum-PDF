@@ -84,7 +84,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 fd.append('mode', modeVal);
             }
             if (id === 'unlock') {
+                const modeUnlock = document.getElementById('mode-unlock').value;
                 const passVal = document.getElementById('pass-unlock').value;
+                fd.append('mode', modeUnlock);
                 fd.append('password', passVal);
             }
 
