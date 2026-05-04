@@ -120,7 +120,8 @@ def convert_to_word_util(pdf_path, output_path, mode='auto'):
     print(f"--- Intentando pdf2docx para: {pdf_path} ---")
     try:
         cv = Converter(pdf_path)
-        cv.convert(output_path, start=0, end=None)
+        # kwargs cpu_count=1 para evitar usar demasiada RAM creando procesos
+        cv.convert(output_path, start=0, end=None, cpu_count=1)
         cv.close()
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             return
@@ -191,6 +192,9 @@ def convert_to_excel_util(pdf_path, output_path):
                             df = pd.DataFrame(lines)
                             sheet_name = f"Pag{i+1}_Texto"[:31]
                             df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+                
+                # ¡MUY IMPORTANTE PARA EVITAR OOM ERROR (502 BAD GATEWAY) EN SERVIDORES GRATIS!
+                page.flush_cache()
             
             if not data_found:
                 # Escribir hoja vacía si no hay nada
