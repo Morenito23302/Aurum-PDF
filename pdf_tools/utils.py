@@ -376,11 +376,15 @@ def apply_text_edits_util(pdf_path, output_path, edits):
             # Marcamos redacción con fondo blanco
             page.add_redact_annot(rect, fill=(1, 1, 1)) 
         
-        # Aplicamos redacciones PRESERVANDO estrictamente gráficos (líneas de tablas)
-        page.apply_redactions(
-            images=fitz.PDF_REDACT_IMAGE_NONE,
-            graphics=fitz.PDF_REDACT_LINE_ART_NONE
-        )
+        # Aplicamos redacciones preservando gráficos (líneas) e imágenes si es posible
+        # Usamos un fallback seguro por si la versión de PyMuPDF es antigua
+        redact_kwargs = {}
+        if hasattr(fitz, "PDF_REDACT_IMAGE_NONE"):
+            redact_kwargs["images"] = fitz.PDF_REDACT_IMAGE_NONE
+        if hasattr(fitz, "PDF_REDACT_LINE_ART_NONE"):
+            redact_kwargs["graphics"] = fitz.PDF_REDACT_LINE_ART_NONE
+            
+        page.apply_redactions(**redact_kwargs)
 
         # --- Paso 2: re-insertar texto ---
         for edit in edit_list:
