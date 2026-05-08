@@ -209,7 +209,9 @@ def api_edit_export_pdf(request):
 
         temp_out = temp_in.replace('.pdf', '_edited.pdf')
         try:
+            print(f"--- INICIANDO EXPORTACIÓN --- Archivo: {file.name}, Ediciones: {len(edits)}")
             apply_text_edits_util(temp_in, temp_out, edits)
+            print(f"--- EXPORTACIÓN COMPLETADA ---")
             response = FileResponse(
                 open(temp_out, 'rb'),
                 as_attachment=True,

@@ -412,9 +412,16 @@ def apply_text_edits_util(pdf_path, output_path, edits):
                 fontname=fontname,
                 color=(r, g, b),
             )
+        
+        # Log de progreso para evitar que el usuario piense que se colgó
+        if page_num % 5 == 0:
+            print(f"Editando página {page_num+1}/{len(doc)}...")
 
-    doc.save(output_path, garbage=4, deflate=True, clean=True)
+    # Guardado optimizado para rapidez y bajo consumo de memoria (crucial para PDFs largos)
+    # garbage=1 es más rápido que 4. Quitamos clean=True para evitar procesos pesados de reescritura.
+    doc.save(output_path, garbage=1, deflate=True)
     doc.close()
+    print(f"PDF exportado correctamente a: {output_path}")
 
 
 def protect_unlock_pdf_util(pdf_path, output_path, password="", mode="unlock"):

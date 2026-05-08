@@ -125,3 +125,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Límites de subida para PDFs pesados y JSONs de edición largos
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15728640  # 15MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 15728640  # 15MB
