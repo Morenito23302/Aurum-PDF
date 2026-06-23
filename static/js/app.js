@@ -145,7 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
         get scale() { return this.autoScale * this.zoomLevel; },
         pages: [], changes: {}, selectedId: null,
         snapshot: null,   // ImageData of the clean rendered page
-        history: []       // Historial de estados (JSON strings de changes)
+        history: [],      // Historial de estados (JSON strings de changes)
+        search: { query: '', results: [], activeIndex: -1 }
     };
 
     const $  = id => document.getElementById(id);
@@ -180,6 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const eBtnUndo   = $('btn-undo');
     const eChSum     = $('changes-summary');
     const eChCnt     = $('changes-count-text');
+    const eSearchIn  = $('editor-search-input');
+    const eSearchCnt = $('editor-search-count');
+    const eBtnSP     = $('btn-search-prev');
+    const eBtnSN     = $('btn-search-next');
+    const eBtnSC     = $('btn-search-clear');
 
     /* ── Font helpers (canvas) ── */
     const fontFamily = fn => {
@@ -193,6 +199,90 @@ document.addEventListener('DOMContentLoaded', () => {
         const b = (flags & 16) || /bold|black|heavy/.test(n);
         const i = (flags & 2)  || /italic|oblique/.test(n);
         return (i ? 'italic ' : '') + (b ? 'bold ' : '');
+    };
+    const norm = text => (text || '').toLocaleLowerCase('es');
+    const currentSearchResult = () => E.search.results[E.search.activeIndex] || null;
+    const matchesSearch = id => E.search.results.some(result => result.id === id);
+    const isCurrentSearch = id => currentSearchResult()?.id === id;
+    const getEffectiveBlockText = blk => E.changes[blk.id]?.text ?? blk.text;
+
+    const updateSearchUI = () => {
+        const { query, results, activeIndex } = E.search;
+        eBtnSC.disabled = !query;
+        const hasResults = results.length > 0;
+        eBtnSP.disabled = !hasResults;
+        eBtnSN.disabled = !hasResults;
+        if (!query) {
+            eSearchCnt.textContent = 'Sin búsqueda';
+            return;
+        }
+        if (!hasResults) {
+            eSearchCnt.textContent = '0 resultados';
+            return;
+        }
+        eSearchCnt.textContent = `${activeIndex + 1} de ${results.length}`;
+    };
+
+    const syncSearchHighlights = () => {
+        drawOverlays(E.currentPage - 1);
+        const active = currentSearchResult();
+        if (active && active.pageIdx === E.currentPage - 1) {
+            const el = eOvr.querySelector(`[data-id="${active.id}"]`);
+            el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+        }
+    };
+
+    const resetSearch = () => {
+        E.search = { query: '', results: [], activeIndex: -1 };
+        eSearchIn.value = '';
+        updateSearchUI();
+        syncSearchHighlights();
+    };
+
+    const goToSearchResult = async offset => {
+        const total = E.search.results.length;
+        if (!total) return;
+        const nextIndex = (E.search.activeIndex + offset + total) % total;
+        const target = E.search.results[nextIndex];
+        E.search.activeIndex = nextIndex;
+        updateSearchUI();
+        if (E.currentPage !== target.pageIdx + 1) {
+            E.currentPage = target.pageIdx + 1;
+            await renderPage(E.currentPage);
+        } else {
+            syncSearchHighlights();
+        }
+        const blk = E.pages[target.pageIdx]?.blocks.find(block => block.id === target.id);
+        if (blk) selectBlock(blk, target.pageIdx);
+    };
+
+    const runSearch = async rawQuery => {
+        const query = rawQuery.trim();
+        E.search.query = query;
+        if (!query) {
+            E.search.results = [];
+            E.search.activeIndex = -1;
+            updateSearchUI();
+            syncSearchHighlights();
+            return;
+        }
+
+        const needle = norm(query);
+        const selectedIndex = E.search.results.findIndex(result => result.id === E.selectedId);
+        E.search.results = E.pages.flatMap((page, pageIdx) => page.blocks
+            .filter(blk => norm(getEffectiveBlockText(blk)).includes(needle))
+            .map(blk => ({ id: blk.id, pageIdx })));
+
+        if (!E.search.results.length) {
+            E.search.activeIndex = -1;
+            updateSearchUI();
+            syncSearchHighlights();
+            return;
+        }
+
+        E.search.activeIndex = selectedIndex >= 0 ? selectedIndex : 0;
+        updateSearchUI();
+        await goToSearchResult(0);
     };
 
     /* ── Redraw edits ── */
@@ -274,7 +364,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const w  = ((ch?.x1 ?? blk.x1) - (ch?.x0 ?? blk.x0)) * s;
             const h  = ((ch?.y1 ?? blk.y1) - (ch?.y0 ?? blk.y0)) * s;
             const div = document.createElement('div');
-            div.className = 'text-overlay' + (ch ? ' modified' : '') + (E.selectedId === blk.id ? ' selected' : '');
+            div.className = 'text-overlay'
+                + (ch ? ' modified' : '')
+                + (matchesSearch(blk.id) ? ' search-match' : '')
+                + (isCurrentSearch(blk.id) ? ' search-current' : '')
+                + (E.selectedId === blk.id ? ' selected' : '');
             div.dataset.id = blk.id;
             div.style.cssText = `left:${x0}px;top:${y0}px;width:${w}px;height:${h}px`;
             setupDrag(div, blk, pageIdx);
@@ -366,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ch.size      = parseFloat(ePSize.value) || blk.size;
         E.changes[id] = ch;
         redrawEdits(idx);
+        if (E.search.query) runSearch(E.search.query);
     };
 
     ePColor.addEventListener('input', () => { ePColorHex.textContent = ePColor.value; livePreview(); });
@@ -390,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
+        if (E.search.query) runSearch(E.search.query);
     });
 
     /* Reset */
@@ -404,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ePSize.value           = ePropsForm.dataset.oSize;
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
+        if (E.search.query) runSearch(E.search.query);
     });
 
     const updateChUI = () => {
@@ -432,11 +529,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     eBtnUndo.addEventListener('click', undo);
     window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            eSearchIn.focus();
+            eSearchIn.select();
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             undo();
         }
     });
+
+    eSearchIn.addEventListener('input', e => { runSearch(e.target.value); });
+    eSearchIn.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            goToSearchResult(e.shiftKey ? -1 : 1);
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            resetSearch();
+        }
+    });
+    eBtnSP.addEventListener('click', () => goToSearchResult(-1));
+    eBtnSN.addEventListener('click', () => goToSearchResult(1));
+    eBtnSC.addEventListener('click', () => resetSearch());
 
     /* ── Zoom ── */
     const ZOOM_STEP = 0.25, ZOOM_MIN = 0.25, ZOOM_MAX = 4.0;
@@ -459,10 +577,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const resetEditor = () => {
-        Object.assign(E, { file: null, pdfDoc: null, pages: [], changes: {}, selectedId: null, zoomLevel: 1.0, snapshot: null });
+        Object.assign(E, {
+            file: null, pdfDoc: null, pages: [], changes: {}, selectedId: null,
+            zoomLevel: 1.0, snapshot: null, history: [], search: { query: '', results: [], activeIndex: -1 }
+        });
         eWS.style.display = 'none'; eDZ.style.display = ''; eFL.style.display = '';
         eFL.innerHTML = ''; eFI.value = ''; eNameIn.value = ''; eOvr.innerHTML = '';
+        eSearchIn.value = '';
         hideProps(); updateChUI();
+        updateSearchUI();
     };
 
     /* ── Drop zone ── */
@@ -496,9 +619,12 @@ document.addEventListener('DOMContentLoaded', () => {
             E.pdfDoc     = await pdfjsLib.getDocument({ data: buf }).promise;
             E.totalPages = E.pdfDoc.numPages;
             E.currentPage = 1; E.zoomLevel = 1.0; E.changes = {}; E.selectedId = null;
+            E.history = [];
+            E.search = { query: '', results: [], activeIndex: -1 };
             eDZ.style.display = 'none'; eFL.style.display = 'none'; eWS.style.display = 'block';
             eBlockInf.textContent = `${total} bloques detectados`;
             updateChUI();
+            updateSearchUI();
             await renderPage(1);
         } catch (e) { alert('Error al cargar: ' + e.message); } finally { hideModal(); }
     };
