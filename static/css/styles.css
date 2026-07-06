@@ -648,6 +648,13 @@ input:checked + .slider:before { transform: translateX(26px); }
     opacity: 0.88;
     transform: translateY(-1px);
 }
+.find-panel-note {
+    margin-top: 8px;
+    padding: 0 2px;
+    font-size: 0.76rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
 .find-panel-status {
     margin-top: 8px;
     padding: 5px 10px;

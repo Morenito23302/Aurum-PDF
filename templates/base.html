@@ -156,7 +156,7 @@
             ───────────────────────────────────────────── -->
             <section id="editpdf" class="tool-section">
                 <h2>Editar Texto del PDF</h2>
-                <p>Selecciona bloques de texto para editarlos. Imágenes, tablas, encabezados y logos se conservan intactos.</p>
+                <p>Selecciona bloques de texto para editarlos. También puedes buscar y reemplazar masivamente texto en todos los bloques encontrados. Imágenes, tablas, encabezados y logos se conservan intactos.</p>
 
                 <!-- Advertencia -->
                 <div class="editor-warning">
@@ -190,7 +190,7 @@
                         <button id="btn-zoom-fit" class="toolbar-btn" title="Ajustar a pantalla">Ajustar</button>
                         <div class="toolbar-sep"></div>
                         <button id="btn-open-find" class="toolbar-btn" title="Buscar (Ctrl+F)">🔍 Buscar</button>
-                        <button id="btn-open-replace" class="toolbar-btn" title="Buscar y reemplazar (Ctrl+H)">⇄ Reemplazar</button>
+                        <button id="btn-open-replace" class="toolbar-btn" title="Buscar y reemplazar masivamente (Ctrl+H)">⇄ Reemplazar masivo</button>
                         <div class="toolbar-sep"></div>
                         <button id="btn-undo" class="toolbar-btn" title="Deshacer (Ctrl+Z)" disabled>&#10226; Deshacer</button>
                         <div class="toolbar-sep"></div>
@@ -221,6 +221,7 @@
                                     <button id="btn-replace-one" class="find-panel-action-btn" disabled>Reemplazar</button>
                                     <button id="btn-replace-all" class="find-panel-action-btn find-panel-action-primary" disabled>Reemplazar todos</button>
                                 </div>
+                                <div id="find-panel-note" class="find-panel-note" style="display:none">Se aplicará al bloque actual o a todos los resultados encontrados.</div>
                                 <div id="find-panel-status" class="find-panel-status" style="display:none"></div>
                             </div>
                             <div id="pdf-viewer-scroll">
