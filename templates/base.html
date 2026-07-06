@@ -189,13 +189,8 @@
                         <button id="btn-zoom-in" class="toolbar-btn" title="Acercar">&#43;</button>
                         <button id="btn-zoom-fit" class="toolbar-btn" title="Ajustar a pantalla">Ajustar</button>
                         <div class="toolbar-sep"></div>
-                        <div class="toolbar-search-group">
-                            <input type="search" id="editor-search-input" class="toolbar-search-input" placeholder="Buscar texto en el PDF" aria-label="Buscar texto en el PDF">
-                            <span id="editor-search-count" class="toolbar-search-count">Sin búsqueda</span>
-                            <button id="btn-search-prev" class="toolbar-btn" title="Resultado anterior">&#8593;</button>
-                            <button id="btn-search-next" class="toolbar-btn" title="Resultado siguiente">&#8595;</button>
-                            <button id="btn-search-clear" class="toolbar-btn" title="Limpiar búsqueda">Limpiar</button>
-                        </div>
+                        <button id="btn-open-find" class="toolbar-btn" title="Buscar (Ctrl+F)">🔍 Buscar</button>
+                        <button id="btn-open-replace" class="toolbar-btn" title="Buscar y reemplazar (Ctrl+H)">⇄ Reemplazar</button>
                         <div class="toolbar-sep"></div>
                         <button id="btn-undo" class="toolbar-btn" title="Deshacer (Ctrl+Z)" disabled>&#10226; Deshacer</button>
                         <div class="toolbar-sep"></div>
@@ -209,6 +204,25 @@
 
                         <!-- Visor PDF + overlays -->
                         <div class="editor-viewer-wrap">
+                            <!-- Panel flotante buscar / reemplazar -->
+                            <div id="find-replace-panel" class="find-replace-panel" style="display:none" role="search" aria-label="Buscar y reemplazar">
+                                <div class="find-panel-row">
+                                    <span class="find-panel-label">Buscar</span>
+                                    <input type="search" id="editor-search-input" class="find-panel-input" placeholder="Buscar en el PDF…" autocomplete="off">
+                                    <span id="editor-search-count" class="find-panel-count">—</span>
+                                    <button id="btn-search-prev" class="find-panel-nav-btn" title="Anterior (Shift+Enter)" disabled>↑</button>
+                                    <button id="btn-search-next" class="find-panel-nav-btn" title="Siguiente (Enter)" disabled>↓</button>
+                                    <button id="btn-toggle-replace-row" class="find-panel-nav-btn find-panel-btn-toggle" title="Mostrar / ocultar reemplazar">⇄</button>
+                                    <button id="btn-search-clear" class="find-panel-close-btn" title="Cerrar (Esc)">✕</button>
+                                </div>
+                                <div id="replace-panel-row" class="find-panel-row find-replace-row" style="display:none">
+                                    <span class="find-panel-label">Reemplazar</span>
+                                    <input type="text" id="editor-replace-input" class="find-panel-input" placeholder="Texto de reemplazo…" autocomplete="off">
+                                    <button id="btn-replace-one" class="find-panel-action-btn" disabled>Reemplazar</button>
+                                    <button id="btn-replace-all" class="find-panel-action-btn find-panel-action-primary" disabled>Reemplazar todos</button>
+                                </div>
+                                <div id="find-panel-status" class="find-panel-status" style="display:none"></div>
+                            </div>
                             <div id="pdf-viewer-scroll">
                                 <div id="pdf-canvas-wrapper">
                                     <canvas id="pdf-canvas"></canvas>

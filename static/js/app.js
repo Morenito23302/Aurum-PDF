@@ -186,6 +186,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const eBtnSP     = $('btn-search-prev');
     const eBtnSN     = $('btn-search-next');
     const eBtnSC     = $('btn-search-clear');
+    const eFRPanel   = $('find-replace-panel');
+    const eReplaceRow= $('replace-panel-row');
+    const eReplaceIn = $('editor-replace-input');
+    const eBtnOpenF  = $('btn-open-find');
+    const eBtnOpenR  = $('btn-open-replace');
+    const eBtnTogR   = $('btn-toggle-replace-row');
+    const eBtnRepOne = $('btn-replace-one');
+    const eBtnRepAll = $('btn-replace-all');
+    const eFPStatus  = $('find-panel-status');
 
     /* ── Font helpers (canvas) ── */
     const fontFamily = fn => {
@@ -208,19 +217,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateSearchUI = () => {
         const { query, results, activeIndex } = E.search;
-        eBtnSC.disabled = !query;
+        eBtnSC.disabled = false; // close btn always enabled
         const hasResults = results.length > 0;
         eBtnSP.disabled = !hasResults;
         eBtnSN.disabled = !hasResults;
+        eBtnRepOne.disabled = !hasResults;
+        eBtnRepAll.disabled = !hasResults;
+        eSearchCnt.className = 'find-panel-count';
         if (!query) {
-            eSearchCnt.textContent = 'Sin búsqueda';
+            eSearchCnt.textContent = '—';
             return;
         }
         if (!hasResults) {
             eSearchCnt.textContent = '0 resultados';
+            eSearchCnt.classList.add('no-results');
             return;
         }
         eSearchCnt.textContent = `${activeIndex + 1} de ${results.length}`;
+        eSearchCnt.classList.add('has-results');
     };
 
     const syncSearchHighlights = () => {
@@ -237,6 +251,30 @@ document.addEventListener('DOMContentLoaded', () => {
         eSearchIn.value = '';
         updateSearchUI();
         syncSearchHighlights();
+    };
+
+    /* ── Panel flotante buscar/reemplazar ── */
+    let statusTimer = null;
+    const showPanelStatus = msg => {
+        eFPStatus.textContent = msg;
+        eFPStatus.style.display = 'block';
+        clearTimeout(statusTimer);
+        statusTimer = setTimeout(() => { eFPStatus.style.display = 'none'; }, 3000);
+    };
+
+    const openFindPanel = (withReplace = false) => {
+        eFRPanel.style.display = '';
+        if (withReplace) {
+            eReplaceRow.style.display = '';
+            eBtnTogR.classList.add('active');
+        }
+        eSearchIn.focus();
+        eSearchIn.select();
+    };
+
+    const closeFindPanel = () => {
+        eFRPanel.style.display = 'none';
+        resetSearch();
     };
 
     const goToSearchResult = async offset => {
@@ -527,18 +565,81 @@ document.addEventListener('DOMContentLoaded', () => {
         hideProps();
     };
 
+    /* ── Reemplazar ── */
+    const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const replaceOne = async () => {
+        const result = currentSearchResult();
+        if (!result || !E.search.query) return;
+        const blk = E.pages[result.pageIdx]?.blocks.find(b => b.id === result.id);
+        if (!blk) return;
+        saveHistoryState();
+        const effectiveText = getEffectiveBlockText(blk);
+        const re = new RegExp(escapeRegex(E.search.query), 'i');
+        const newText = effectiveText.replace(re, eReplaceIn.value);
+        const ch = E.changes[blk.id] || {};
+        ch.text = newText;
+        E.changes[blk.id] = ch;
+        updateChUI();
+        drawOverlays(result.pageIdx);
+        redrawEdits(result.pageIdx);
+        await runSearch(E.search.query);
+    };
+
+    const replaceAll = async () => {
+        if (!E.search.query || !E.search.results.length) return;
+        const re = new RegExp(escapeRegex(E.search.query), 'gi');
+        const replaceWith = eReplaceIn.value;
+        saveHistoryState();
+        let count = 0;
+        const seen = new Set();
+        E.search.results.forEach(result => {
+            if (seen.has(result.id)) return;
+            seen.add(result.id);
+            const blk = E.pages[result.pageIdx]?.blocks.find(b => b.id === result.id);
+            if (!blk) return;
+            const effectiveText = getEffectiveBlockText(blk);
+            const newText = effectiveText.replace(re, replaceWith);
+            if (newText !== effectiveText) {
+                const ch = E.changes[blk.id] || {};
+                ch.text = newText;
+                E.changes[blk.id] = ch;
+                count++;
+            }
+        });
+        updateChUI();
+        drawOverlays(E.currentPage - 1);
+        redrawEdits(E.currentPage - 1);
+        await runSearch(E.search.query);
+        showPanelStatus(`✔ ${count} bloque${count !== 1 ? 's' : ''} reemplazado${count !== 1 ? 's' : ''}`);
+    };
+
     eBtnUndo.addEventListener('click', undo);
     window.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
             e.preventDefault();
-            eSearchIn.focus();
-            eSearchIn.select();
+            openFindPanel(false);
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+            e.preventDefault();
+            openFindPanel(true);
             return;
         }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             undo();
         }
+    });
+
+    eBtnOpenF.addEventListener('click', () => openFindPanel(false));
+    eBtnOpenR.addEventListener('click', () => openFindPanel(true));
+
+    eBtnTogR.addEventListener('click', () => {
+        const open = eReplaceRow.style.display !== 'none';
+        eReplaceRow.style.display = open ? 'none' : '';
+        eBtnTogR.classList.toggle('active', !open);
+        if (!open) eReplaceIn.focus();
     });
 
     eSearchIn.addEventListener('input', e => { runSearch(e.target.value); });
@@ -549,12 +650,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (e.key === 'Escape') {
             e.preventDefault();
-            resetSearch();
+            closeFindPanel();
         }
+    });
+    eReplaceIn.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); replaceOne(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeFindPanel(); }
     });
     eBtnSP.addEventListener('click', () => goToSearchResult(-1));
     eBtnSN.addEventListener('click', () => goToSearchResult(1));
-    eBtnSC.addEventListener('click', () => resetSearch());
+    eBtnSC.addEventListener('click', () => closeFindPanel());
+    eBtnRepOne.addEventListener('click', () => replaceOne());
+    eBtnRepAll.addEventListener('click', () => replaceAll());
 
     /* ── Zoom ── */
     const ZOOM_STEP = 0.25, ZOOM_MIN = 0.25, ZOOM_MAX = 4.0;
@@ -584,6 +691,9 @@ document.addEventListener('DOMContentLoaded', () => {
         eWS.style.display = 'none'; eDZ.style.display = ''; eFL.style.display = '';
         eFL.innerHTML = ''; eFI.value = ''; eNameIn.value = ''; eOvr.innerHTML = '';
         eSearchIn.value = '';
+        eFRPanel.style.display = 'none';
+        eReplaceRow.style.display = 'none';
+        eBtnTogR.classList.remove('active');
         hideProps(); updateChUI();
         updateSearchUI();
     };

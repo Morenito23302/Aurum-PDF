@@ -467,31 +467,8 @@ input:checked + .slider:before { transform: translateX(26px); }
     color: var(--text-muted);
 }
 .toolbar-search-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    flex: 1 1 320px;
-}
-.toolbar-search-input {
-    min-width: 0;
-    flex: 1 1 180px;
-    padding: 7px 10px;
-    border-radius: 9px;
-    border: 1px solid var(--glass-border);
-    background: var(--input-bg);
-    color: var(--text-color);
-    font-size: 0.9rem;
-    outline: none;
-}
-.toolbar-search-input:focus {
-    border-color: #0ea5e9;
-    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
-}
-.toolbar-search-count {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
+    /* eliminado: ahora el buscador es un panel flotante */
+    display: none;
 }
 
 /* Layout dos columnas */
@@ -507,11 +484,184 @@ input:checked + .slider:before { transform: translateX(26px); }
 
 /* Visor PDF */
 .editor-viewer-wrap {
+    position: relative; /* necesario para el panel flotante */
     min-width: 0;
     overflow: hidden;
     border-radius: 14px;
     border: 1px solid var(--glass-border);
     background: #222;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Panel flotante Buscar / Reemplazar
+────────────────────────────────────────────────────────── */
+.find-replace-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 60;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 8px 36px rgba(0, 0, 0, 0.22);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 460px;
+    max-width: calc(100% - 24px);
+    animation: findPanelIn 0.18s ease;
+}
+@keyframes findPanelIn {
+    from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.find-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.find-replace-row {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--glass-border);
+}
+.find-panel-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 72px;
+    text-align: right;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.find-panel-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 11px;
+    border-radius: 9px;
+    border: 1.5px solid var(--glass-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.find-panel-input:focus {
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
+}
+.find-panel-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 58px;
+    text-align: center;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 7px;
+    padding: 4px 8px;
+}
+.find-panel-count.has-results {
+    color: #0ea5e9;
+    border-color: rgba(14, 165, 233, 0.4);
+    background: rgba(14, 165, 233, 0.08);
+}
+.find-panel-count.no-results {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.4);
+    background: rgba(248, 113, 113, 0.08);
+}
+.find-panel-nav-btn {
+    background: var(--nav-btn-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-color);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+}
+.find-panel-nav-btn:hover:not(:disabled) {
+    background: var(--nav-btn-active);
+    transform: translateY(-1px);
+}
+.find-panel-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.find-panel-btn-toggle.active {
+    background: rgba(14, 165, 233, 0.18);
+    border-color: #0ea5e9;
+    color: #0ea5e9;
+}
+.find-panel-close-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    border-radius: 7px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+.find-panel-close-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+.find-panel-action-btn {
+    background: var(--nav-btn-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-color);
+    border-radius: 9px;
+    padding: 6px 14px;
+    font-size: 0.83rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+}
+.find-panel-action-btn:hover:not(:disabled) {
+    background: var(--nav-btn-active);
+    transform: translateY(-1px);
+}
+.find-panel-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.find-panel-action-primary {
+    background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #052640;
+}
+.find-panel-action-primary:hover:not(:disabled) {
+    opacity: 0.88;
+    transform: translateY(-1px);
+}
+.find-panel-status {
+    margin-top: 8px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    color: #16a34a;
+    text-align: center;
+}
+[data-theme="dark"] .find-panel-status {
+    background: rgba(34, 197, 94, 0.1);
+    color: #4ade80;
 }
 #pdf-viewer-scroll {
     overflow: auto;
