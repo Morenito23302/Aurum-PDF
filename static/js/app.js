@@ -736,6 +736,10 @@ document.addEventListener('DOMContentLoaded', () => {
             E.history = [];
             E.search = { query: '', results: [], activeIndex: -1 };
             eDZ.style.display = 'none'; eFL.style.display = 'none'; eWS.style.display = 'block';
+            eFRPanel.style.display = '';
+            eReplaceRow.style.display = '';
+            eReplaceNote.style.display = 'block';
+            eBtnTogR.classList.add('active');
             eBlockInf.textContent = `${total} bloques detectados`;
             updateChUI();
             updateSearchUI();

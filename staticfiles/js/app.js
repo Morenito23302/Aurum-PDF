@@ -194,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const eBtnTogR   = $('btn-toggle-replace-row');
     const eBtnRepOne = $('btn-replace-one');
     const eBtnRepAll = $('btn-replace-all');
+    const eReplaceNote= $('find-panel-note');
     const eFPStatus  = $('find-panel-status');
 
     /* ── Font helpers (canvas) ── */
@@ -266,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         eFRPanel.style.display = '';
         if (withReplace) {
             eReplaceRow.style.display = '';
+            eReplaceNote.style.display = 'block';
             eBtnTogR.classList.add('active');
         }
         eSearchIn.focus();
@@ -638,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
     eBtnTogR.addEventListener('click', () => {
         const open = eReplaceRow.style.display !== 'none';
         eReplaceRow.style.display = open ? 'none' : '';
+        eReplaceNote.style.display = open ? 'none' : 'block';
         eBtnTogR.classList.toggle('active', !open);
         if (!open) eReplaceIn.focus();
     });
@@ -732,6 +735,10 @@ document.addEventListener('DOMContentLoaded', () => {
             E.history = [];
             E.search = { query: '', results: [], activeIndex: -1 };
             eDZ.style.display = 'none'; eFL.style.display = 'none'; eWS.style.display = 'block';
+            eFRPanel.style.display = '';
+            eReplaceRow.style.display = '';
+            eReplaceNote.style.display = 'block';
+            eBtnTogR.classList.add('active');
             eBlockInf.textContent = `${total} bloques detectados`;
             updateChUI();
             updateSearchUI();

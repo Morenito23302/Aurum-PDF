@@ -200,30 +200,30 @@
                     </div>
 
                     <!-- Layout dos columnas -->
+                    <div id="find-replace-panel" class="find-replace-panel" style="display:none" role="search" aria-label="Buscar y reemplazar">
+                        <div class="find-panel-row">
+                            <span class="find-panel-label">Buscar</span>
+                            <input type="search" id="editor-search-input" class="find-panel-input" placeholder="Buscar en el PDF…" autocomplete="off">
+                            <span id="editor-search-count" class="find-panel-count">—</span>
+                            <button id="btn-search-prev" class="find-panel-nav-btn" title="Anterior (Shift+Enter)" disabled>↑</button>
+                            <button id="btn-search-next" class="find-panel-nav-btn" title="Siguiente (Enter)" disabled>↓</button>
+                            <button id="btn-toggle-replace-row" class="find-panel-nav-btn find-panel-btn-toggle" title="Mostrar / ocultar reemplazar">⇄</button>
+                            <button id="btn-search-clear" class="find-panel-close-btn" title="Cerrar (Esc)">✕</button>
+                        </div>
+                        <div id="replace-panel-row" class="find-panel-row find-replace-row" style="display:none">
+                            <span class="find-panel-label">Reemplazar</span>
+                            <input type="text" id="editor-replace-input" class="find-panel-input" placeholder="Texto de reemplazo…" autocomplete="off">
+                            <button id="btn-replace-one" class="find-panel-action-btn" disabled>Reemplazar</button>
+                            <button id="btn-replace-all" class="find-panel-action-btn find-panel-action-primary" disabled>Reemplazar todos</button>
+                        </div>
+                        <div id="find-panel-note" class="find-panel-note" style="display:none">Se aplicará al bloque actual o a todos los resultados encontrados.</div>
+                        <div id="find-panel-status" class="find-panel-status" style="display:none"></div>
+                    </div>
+
                     <div class="editor-columns">
 
                         <!-- Visor PDF + overlays -->
                         <div class="editor-viewer-wrap">
-                            <!-- Panel flotante buscar / reemplazar -->
-                            <div id="find-replace-panel" class="find-replace-panel" style="display:none" role="search" aria-label="Buscar y reemplazar">
-                                <div class="find-panel-row">
-                                    <span class="find-panel-label">Buscar</span>
-                                    <input type="search" id="editor-search-input" class="find-panel-input" placeholder="Buscar en el PDF…" autocomplete="off">
-                                    <span id="editor-search-count" class="find-panel-count">—</span>
-                                    <button id="btn-search-prev" class="find-panel-nav-btn" title="Anterior (Shift+Enter)" disabled>↑</button>
-                                    <button id="btn-search-next" class="find-panel-nav-btn" title="Siguiente (Enter)" disabled>↓</button>
-                                    <button id="btn-toggle-replace-row" class="find-panel-nav-btn find-panel-btn-toggle" title="Mostrar / ocultar reemplazar">⇄</button>
-                                    <button id="btn-search-clear" class="find-panel-close-btn" title="Cerrar (Esc)">✕</button>
-                                </div>
-                                <div id="replace-panel-row" class="find-panel-row find-replace-row" style="display:none">
-                                    <span class="find-panel-label">Reemplazar</span>
-                                    <input type="text" id="editor-replace-input" class="find-panel-input" placeholder="Texto de reemplazo…" autocomplete="off">
-                                    <button id="btn-replace-one" class="find-panel-action-btn" disabled>Reemplazar</button>
-                                    <button id="btn-replace-all" class="find-panel-action-btn find-panel-action-primary" disabled>Reemplazar todos</button>
-                                </div>
-                                <div id="find-panel-note" class="find-panel-note" style="display:none">Se aplicará al bloque actual o a todos los resultados encontrados.</div>
-                                <div id="find-panel-status" class="find-panel-status" style="display:none"></div>
-                            </div>
                             <div id="pdf-viewer-scroll">
                                 <div id="pdf-canvas-wrapper">
                                     <canvas id="pdf-canvas"></canvas>
