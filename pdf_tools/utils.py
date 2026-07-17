@@ -322,9 +322,9 @@ def _map_font(font_name, flags=0):
 
     if any(x in name for x in ["helvetica", "arial", "calibri", "tahoma",
                                  "verdana", "gothic", "futura", "gill"]):
-        if is_bold and is_italic: return "helv"   # no helv-bi in base14, use helv
+        if is_bold and is_italic: return "hebi"
         if is_bold:               return "hebo"
-        if is_italic:             return "heoi"
+        if is_italic:             return "heit"
         return "helv"
     elif any(x in name for x in ["times", "palatino", "garamond", "georgia",
                                   "roman", "minion", "caslon"]):
@@ -405,13 +405,26 @@ def apply_text_edits_util(pdf_path, output_path, edits):
 
             # Usar origin_y (baseline exacto) en lugar de y1 para evitar corrimiento vertical
             baseline_y = edit.get("origin_y", edit["y1"])
-            page.insert_text(
-                fitz.Point(edit["x0"], baseline_y),
-                new_text,
-                fontsize=size,
-                fontname=fontname,
-                color=(r, g, b),
-            )
+            point = fitz.Point(edit["x0"], baseline_y)
+            try:
+                page.insert_text(
+                    point,
+                    new_text,
+                    fontsize=size,
+                    fontname=fontname,
+                    color=(r, g, b),
+                )
+            except Exception as e:
+                # Fallback defensivo: si un alias de fuente falla en esta versión,
+                # usamos Helvetica base para no romper la exportación.
+                print(f"Fuente '{fontname}' no disponible ({e}). Usando fallback 'helv'.")
+                page.insert_text(
+                    point,
+                    new_text,
+                    fontsize=size,
+                    fontname="helv",
+                    color=(r, g, b),
+                )
         
         # Log de progreso para evitar que el usuario piense que se colgó
         if page_num % 5 == 0:
