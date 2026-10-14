@@ -9,12 +9,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Crear directorios para evitar fallo al instalar Java (requerido por LibreOffice) en python:slim
 RUN mkdir -p /usr/share/man/man1 /usr/share/man/man2
 
-# Instalar dependencias del sistema requeridas para OCR y manipulación de imágenes/PDFs
+# Instalar dependencias del sistema requeridas para OCR y manipulación de imágenes/PDFs.
+# De LibreOffice solo los módulos que se usan: Writer/Calc/Impress para
+# "Convertir a PDF" y Draw para importar PDF en "PDF a Word". El paquete
+# completo (Base, etc.) inflaba la imagen y hacía lentos los deploys.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-spa \
     poppler-utils \
-    libreoffice \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
+    libreoffice-draw \
     libgl1 \
     libglib2.0-0 \
     && apt-get clean \
