@@ -535,14 +535,22 @@ def select_pages_util(pdf_path, output_path, pages):
     Crea un PDF solo con las páginas indicadas (índices 0-based), en el orden
     recibido. Se usa en "Dividir PDF": el usuario quita las páginas que no
     quiere y exporta las que dejó.
+
+    Cada página se copia tal cual a un documento nuevo con insert_pdf, que
+    resuelve los recursos heredados del árbol de páginas (logos, imágenes de
+    encabezado, fuentes). doc.select() reconstruía el árbol y esas páginas
+    salían sin sus imágenes. Se guarda sin recomprimir ni limpiar nada.
     """
     doc = fitz.open(pdf_path)
+    out = fitz.open()
     try:
         total = len(doc)
         selected = [int(p) for p in pages if 0 <= int(p) < total]
         if not selected:
             raise Exception("Debes dejar al menos una página para exportar.")
-        doc.select(selected)
-        doc.save(output_path, garbage=3, deflate=True)
+        for page_num in selected:
+            out.insert_pdf(doc, from_page=page_num, to_page=page_num)
+        out.save(output_path)
     finally:
+        out.close()
         doc.close()
