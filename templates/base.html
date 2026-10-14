@@ -33,6 +33,7 @@
     <main class="container">
         <nav class="glass-nav">
             <button class="nav-btn active" data-target="merge">Unir PDFs</button>
+            <button class="nav-btn" data-target="split">Dividir PDF</button>
             <button class="nav-btn" data-target="word">PDF a Word (OCR)</button>
             <button class="nav-btn" data-target="excel">PDF a Excel</button>
             <button class="nav-btn" data-target="images">Extraer Imágenes</button>
@@ -55,6 +56,35 @@
                 <div class="action-bar">
                     <input type="text" id="name-merge" placeholder="Nombre de archivo de salida (sin .pdf)" class="input-name">
                     <button id="btn-merge" class="btn-primary aero-btn" disabled>Unir y Descargar</button>
+                </div>
+            </section>
+
+            <!-- ─── Dividir PDF ─── -->
+            <section id="split" class="tool-section">
+                <h2>Dividir PDF</h2>
+                <p>Carga un PDF, quita las páginas que no quieres (también puedes arrastrarlas para cambiar el orden) y exporta un PDF solo con las que dejaste.</p>
+                <div class="drop-zone single-drop" id="drop-zone-split">
+                    <span class="drop-text">Arrastra un PDF aquí o <span class="browse">explora</span></span>
+                    <input type="file" id="fileput-split" accept="application/pdf" hidden>
+                </div>
+                <div id="split-workspace" class="split-workspace" style="display:none">
+                    <div class="split-toolbar">
+                        <span id="split-file-name" class="split-file-name"></span>
+                        <span id="split-summary" class="split-summary"></span>
+                        <div class="split-toolbar-actions">
+                            <button type="button" id="btn-split-restore" class="toolbar-btn" disabled>↺ Restaurar todas</button>
+                            <button type="button" id="btn-split-close" class="toolbar-btn toolbar-btn-danger">✕ Cerrar</button>
+                        </div>
+                    </div>
+                    <div id="split-pages" class="split-pages"></div>
+                    <div id="split-removed-wrap" class="split-removed-wrap" style="display:none">
+                        <h3 class="split-removed-title">Páginas quitadas <small>(clic para devolverlas)</small></h3>
+                        <div id="split-removed" class="split-removed"></div>
+                    </div>
+                    <div class="action-bar">
+                        <input type="text" id="name-split" placeholder="Nombre de archivo de salida (sin .pdf)" class="input-name">
+                        <button id="btn-split" class="btn-primary aero-btn" disabled>Exportar páginas</button>
+                    </div>
                 </div>
             </section>
 

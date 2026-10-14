@@ -137,6 +137,179 @@ document.addEventListener('DOMContentLoaded', () => {
     initTool('unlock',   '/api/unlock/',          false);
 
     /* ════════════════════════════════════════════════
+       DIVIDIR PDF: quitar páginas y exportar las que quedan
+    ════════════════════════════════════════════════ */
+    (() => {
+        const sDZ      = document.getElementById('drop-zone-split');
+        const sFI      = document.getElementById('fileput-split');
+        const sWS      = document.getElementById('split-workspace');
+        const sPages   = document.getElementById('split-pages');
+        const sRemWrap = document.getElementById('split-removed-wrap');
+        const sRemoved = document.getElementById('split-removed');
+        const sName    = document.getElementById('name-split');
+        const sBtn     = document.getElementById('btn-split');
+        const sRestore = document.getElementById('btn-split-restore');
+        const sClose   = document.getElementById('btn-split-close');
+        const sFile    = document.getElementById('split-file-name');
+        const sSummary = document.getElementById('split-summary');
+
+        // kept: páginas que se exportan (en este orden); removed: quitadas.
+        const S = { file: null, pdf: null, kept: [], removed: [], thumbs: new Map(), token: 0 };
+
+        // Miniaturas bajo demanda y de a una, para no colgar el navegador con
+        // PDFs largos.
+        const queue = [];
+        let rendering = false;
+        const applyThumb = idx => {
+            const src = S.thumbs.get(idx); if (!src) return;
+            sWS.querySelectorAll(`img[data-page="${idx}"]`).forEach(img => { img.src = src; img.classList.add('loaded'); });
+        };
+        const pumpQueue = async () => {
+            if (rendering) return;
+            rendering = true;
+            while (queue.length) {
+                const { idx, token } = queue.shift();
+                if (token !== S.token) continue;
+                if (S.thumbs.has(idx)) { applyThumb(idx); continue; }
+                try {
+                    const page = await S.pdf.getPage(idx + 1);
+                    const base = page.getViewport({ scale: 1 });
+                    const vp = page.getViewport({ scale: 180 / base.width });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = vp.width; canvas.height = vp.height;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+                    if (token !== S.token) continue;
+                    S.thumbs.set(idx, canvas.toDataURL('image/jpeg', 0.8));
+                    applyThumb(idx);
+                } catch (e) { console.error(e); }
+            }
+            rendering = false;
+        };
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                observer.unobserve(entry.target);
+                const idx = Number(entry.target.dataset.page);
+                if (S.thumbs.has(idx)) applyThumb(idx);
+                else { queue.push({ idx, token: S.token }); pumpQueue(); }
+            });
+        }, { rootMargin: '300px' });
+
+        const pageCard = (idx, removed) => {
+            const card = document.createElement('div');
+            card.className = 'split-page' + (removed ? ' split-page--removed' : '');
+            card.dataset.page = idx;
+            card.innerHTML = `
+                <div class="split-thumb"><img data-page="${idx}" alt="Página ${idx + 1}"></div>
+                <span class="split-page-label">Pág. ${idx + 1}</span>
+                <button type="button" class="split-page-btn" title="${removed ? 'Devolver página' : 'Quitar página'}" aria-label="${removed ? 'Devolver' : 'Quitar'} página ${idx + 1}">${removed ? '↺' : '✕'}</button>`;
+            card.querySelector('.split-page-btn').addEventListener('click', e => {
+                e.stopPropagation();
+                removed ? restorePage(idx) : removePage(idx);
+            });
+            if (removed) card.addEventListener('click', () => restorePage(idx));
+            const img = card.querySelector('img');
+            if (S.thumbs.has(idx)) { img.src = S.thumbs.get(idx); img.classList.add('loaded'); }
+            else observer.observe(img);
+            return card;
+        };
+
+        const render = () => {
+            observer.disconnect();   // las tarjetas se recrean; se observan las nuevas
+            sPages.innerHTML = '';
+            S.kept.forEach(idx => sPages.appendChild(pageCard(idx, false)));
+            if (!S.kept.length) sPages.innerHTML = '<p class="split-empty">Quitaste todas las páginas. Devuelve al menos una para exportar.</p>';
+            sRemoved.innerHTML = '';
+            S.removed.slice().sort((a, b) => a - b).forEach(idx => sRemoved.appendChild(pageCard(idx, true)));
+            sRemWrap.style.display = S.removed.length ? '' : 'none';
+            const total = S.kept.length + S.removed.length;
+            sSummary.textContent = `${S.kept.length} de ${total} página${total !== 1 ? 's' : ''} se exportarán`;
+            sBtn.disabled = !S.kept.length;
+            sRestore.disabled = !S.removed.length && S.kept.every((p, i) => p === i);
+        };
+
+        const removePage = idx => { S.kept = S.kept.filter(p => p !== idx); S.removed.push(idx); render(); };
+        const restorePage = idx => {
+            S.removed = S.removed.filter(p => p !== idx);
+            // Vuelve a su lugar según el número de página original.
+            const at = S.kept.findIndex(p => p > idx);
+            at < 0 ? S.kept.push(idx) : S.kept.splice(at, 0, idx);
+            render();
+        };
+
+        const reset = () => {
+            S.token++;
+            queue.length = 0;
+            observer.disconnect();
+            if (S.pdf && S.pdf.destroy) S.pdf.destroy();
+            Object.assign(S, { file: null, pdf: null, kept: [], removed: [], thumbs: new Map() });
+            sPages.innerHTML = ''; sRemoved.innerHTML = '';
+            sWS.style.display = 'none'; sDZ.style.display = '';
+            sFI.value = ''; sName.value = '';
+        };
+
+        const loadFile = async file => {
+            if (!file || !file.name.toLowerCase().endsWith('.pdf')) return alert('Selecciona un PDF válido.');
+            reset();
+            showModal('Leyendo páginas del PDF...');
+            try {
+                S.file = file;
+                S.pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                S.kept = Array.from({ length: S.pdf.numPages }, (_, i) => i);
+                sFile.textContent = `📄 ${file.name}`;
+                sDZ.style.display = 'none'; sWS.style.display = '';
+                render();
+            } catch (e) {
+                reset();
+                const locked = e && e.name === 'PasswordException';
+                alert(locked
+                    ? 'El PDF está protegido con contraseña. Desbloquéalo primero en "Proteger / Desbloquear".'
+                    : 'No se pudo leer el PDF: ' + (e && e.message ? e.message : e));
+            } finally { hideModal(); }
+        };
+
+        // Arrastrar para reordenar las páginas que se van a exportar.
+        new Sortable(sPages, {
+            animation: 150,
+            filter: '.split-page-btn',
+            preventOnFilter: false,
+            onEnd() { S.kept = Array.from(sPages.querySelectorAll('.split-page')).map(el => Number(el.dataset.page)); render(); }
+        });
+
+        ['dragenter','dragover','dragleave','drop'].forEach(ev => sDZ.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }));
+        ['dragenter','dragover'].forEach(ev => sDZ.addEventListener(ev, () => sDZ.classList.add('dragover')));
+        ['dragleave','drop'].forEach(ev => sDZ.addEventListener(ev, () => sDZ.classList.remove('dragover')));
+        sDZ.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+        sDZ.addEventListener('click', () => sFI.click());
+        sFI.addEventListener('change', e => loadFile(e.target.files[0]));
+
+        sRestore.addEventListener('click', () => { S.kept = S.kept.concat(S.removed).sort((a, b) => a - b); S.removed = []; render(); });
+        sClose.addEventListener('click', reset);
+
+        sBtn.addEventListener('click', async () => {
+            if (!S.file || !S.kept.length) return;
+            const cname = sName.value.trim() || S.file.name.replace(/\.pdf$/i, '') + '_dividido';
+            showModal('Generando PDF con las páginas seleccionadas...');
+            try {
+                const fd = new FormData();
+                fd.append('file', S.file);
+                fd.append('pages', JSON.stringify(S.kept));
+                fd.append('custom_name', cname);
+                const res = await fetch('/api/split/', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    let msg = await res.text();
+                    try { msg = JSON.parse(msg).error || msg; } catch (e) {}
+                    throw new Error(msg || res.statusText);
+                }
+                const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: cname + '.pdf' });
+                document.body.appendChild(a); a.click(); a.remove();
+            } catch (e) {
+                alert('⚠️ AURUM PDF informa:\n' + e.message);
+            } finally { hideModal(); }
+        });
+    })();
+
+    /* ════════════════════════════════════════════════
        EDITOR PDF
     ════════════════════════════════════════════════ */
     const E = {

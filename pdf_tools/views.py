@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 import json as _json
-from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, protect_unlock_pdf_util
+from .utils import merge_pdfs_util, convert_to_word_util, convert_to_excel_util, extract_images_util, convert_to_pdf_util, extract_text_blocks_util, apply_text_edits_util, protect_unlock_pdf_util, select_pages_util
 
 def index(request):
     return render(request, 'base.html')
@@ -254,3 +254,36 @@ def api_unlock_pdf(request):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse({"error": "Invalid request"}, status=400)
+
+
+@csrf_exempt
+def api_split_pdf(request):
+    """Recibe un PDF + la lista de páginas a conservar y devuelve el PDF nuevo."""
+    if request.method != 'POST':
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    file = request.FILES.get('file')
+    custom_name = request.POST.get('custom_name', '').strip() or 'documento_dividido'
+    if not file:
+        return JsonResponse({"error": "Se necesita un archivo PDF."}, status=400)
+    try:
+        pages = _json.loads(request.POST.get('pages', '[]'))
+        if not isinstance(pages, list):
+            raise ValueError
+    except Exception:
+        return JsonResponse({"error": "Lista de páginas inválida."}, status=400)
+
+    fd, temp_in = tempfile.mkstemp(suffix='.pdf')
+    with os.fdopen(fd, 'wb') as dst:
+        for chunk in file.chunks():
+            dst.write(chunk)
+    temp_out = temp_in.replace('.pdf', '_split.pdf')
+    try:
+        select_pages_util(temp_in, temp_out, pages)
+        return FileResponse(open(temp_out, 'rb'), as_attachment=True, filename=f"{custom_name}.pdf")
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    finally:
+        try:
+            os.unlink(temp_in)
+        except Exception:
+            pass

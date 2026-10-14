@@ -11,5 +11,6 @@ urlpatterns = [
     path('api/edit-pdf/extract-text/', views.api_edit_extract_text, name='api_edit_extract_text'),
     path('api/edit-pdf/export/', views.api_edit_export_pdf, name='api_edit_export_pdf'),
     path('api/unlock/', views.api_unlock_pdf, name='api_unlock_pdf'),
+    path('api/split/', views.api_split_pdf, name='api_split_pdf'),
 ]
 

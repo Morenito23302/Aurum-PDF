@@ -528,3 +528,21 @@ def protect_unlock_pdf_util(pdf_path, output_path, password="", mode="unlock"):
                 doc.authenticate(password)
         doc.save(output_path, encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw=password, user_pw=password)
     doc.close()
+
+
+def select_pages_util(pdf_path, output_path, pages):
+    """
+    Crea un PDF solo con las páginas indicadas (índices 0-based), en el orden
+    recibido. Se usa en "Dividir PDF": el usuario quita las páginas que no
+    quiere y exporta las que dejó.
+    """
+    doc = fitz.open(pdf_path)
+    try:
+        total = len(doc)
+        selected = [int(p) for p in pages if 0 <= int(p) < total]
+        if not selected:
+            raise Exception("Debes dejar al menos una página para exportar.")
+        doc.select(selected)
+        doc.save(output_path, garbage=3, deflate=True)
+    finally:
+        doc.close()
