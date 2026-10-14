@@ -180,23 +180,26 @@
 
                     <!-- Toolbar de navegación de páginas -->
                     <div class="editor-toolbar">
-                        <button id="btn-prev-page" class="toolbar-btn" title="Página anterior">&#9664;</button>
-                        <span id="page-indicator" class="page-indicator">Página 1 de 1</span>
-                        <button id="btn-next-page" class="toolbar-btn" title="Página siguiente">&#9654;</button>
-                        <div class="toolbar-sep"></div>
-                        <button id="btn-zoom-out" class="toolbar-btn" title="Alejar">&#8722;</button>
-                        <span id="zoom-label" class="zoom-label">100%</span>
-                        <button id="btn-zoom-in" class="toolbar-btn" title="Acercar">&#43;</button>
-                        <button id="btn-zoom-fit" class="toolbar-btn" title="Ajustar a pantalla">Ajustar</button>
-                        <div class="toolbar-sep"></div>
-                        <button id="btn-open-find" class="toolbar-btn" title="Buscar (Ctrl+F)">🔍 Buscar</button>
-                        <button id="btn-open-replace" class="toolbar-btn" title="Buscar y reemplazar masivamente (Ctrl+H)">⇄ Reemplazar masivo</button>
-                        <div class="toolbar-sep"></div>
-                        <button id="btn-undo" class="toolbar-btn" title="Deshacer (Ctrl+Z)" disabled>&#10226; Deshacer</button>
-                        <div class="toolbar-sep"></div>
-                        <span id="editor-blocks-info" class="toolbar-info"></span>
-                        <div style="flex:1"></div>
-                        <button id="btn-close-editor" class="toolbar-btn toolbar-btn-danger" title="Cerrar editor">&#10005; Cerrar</button>
+                        <div class="toolbar-group" role="group" aria-label="Páginas">
+                            <button id="btn-prev-page" class="toolbar-btn toolbar-btn-icon" title="Página anterior" aria-label="Página anterior">&#9664;</button>
+                            <span id="page-indicator" class="page-indicator">Página 1 de 1</span>
+                            <button id="btn-next-page" class="toolbar-btn toolbar-btn-icon" title="Página siguiente" aria-label="Página siguiente">&#9654;</button>
+                        </div>
+                        <div class="toolbar-group" role="group" aria-label="Zoom">
+                            <button id="btn-zoom-out" class="toolbar-btn toolbar-btn-icon" title="Alejar" aria-label="Alejar">&#8722;</button>
+                            <span id="zoom-label" class="zoom-label">100%</span>
+                            <button id="btn-zoom-in" class="toolbar-btn toolbar-btn-icon" title="Acercar" aria-label="Acercar">&#43;</button>
+                            <button id="btn-zoom-fit" class="toolbar-btn" title="Ajustar a pantalla">Ajustar</button>
+                        </div>
+                        <div class="toolbar-group" role="group" aria-label="Edición">
+                            <button id="btn-open-find" class="toolbar-btn" title="Buscar en todo el PDF (Ctrl+F)">🔍 Buscar</button>
+                            <button id="btn-open-replace" class="toolbar-btn" title="Buscar y reemplazar en todo el PDF (Ctrl+H)">⇄ Reemplazar</button>
+                            <button id="btn-undo" class="toolbar-btn" title="Deshacer (Ctrl+Z)" disabled>&#10226; Deshacer</button>
+                        </div>
+                        <div class="toolbar-end">
+                            <span id="editor-blocks-info" class="toolbar-info"></span>
+                            <button id="btn-close-editor" class="toolbar-btn toolbar-btn-danger" title="Cerrar editor">&#10005; Cerrar</button>
+                        </div>
                     </div>
 
                     <!-- Layout dos columnas -->
