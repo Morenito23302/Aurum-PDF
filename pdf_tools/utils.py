@@ -280,10 +280,10 @@ def extract_text_blocks_util(pdf_path):
             "blocks": []
         }
         counter = 0
-        for block in page_dict.get("blocks", []):
+        for block_idx, block in enumerate(page_dict.get("blocks", [])):
             if block.get("type") != 0:   # 0 = text, 1 = image
                 continue
-            for line in block.get("lines", []):
+            for line_idx, line in enumerate(block.get("lines", [])):
                 for span in line.get("spans", []):
                     text = span.get("text", "")
                     if not text.strip():
@@ -296,6 +296,10 @@ def extract_text_blocks_util(pdf_path):
                     origin = span.get("origin", (bbox[0], bbox[3]))
                     page_data["blocks"].append({
                         "id": f"p{page_num}_s{counter}",
+                        # Línea a la que pertenece el span: el buscador une los
+                        # spans de una misma línea para encontrar palabras o
+                        # frases que el PDF partió en varios fragmentos.
+                        "line": f"p{page_num}_b{block_idx}_l{line_idx}",
                         "text": text,
                         "x0": round(bbox[0], 2),
                         "y0": round(bbox[1], 2),

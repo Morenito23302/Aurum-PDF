@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pages: [], changes: {}, selectedId: null,
         snapshot: null,   // ImageData of the clean rendered page
         history: [],      // Historial de estados (JSON strings de changes)
-        search: { query: '', results: [], activeIndex: -1 }
+        search: { query: '', results: [], activeIndex: -1, matchIds: new Set() }
     };
 
     const $  = id => document.getElementById(id);
@@ -210,11 +210,143 @@ document.addEventListener('DOMContentLoaded', () => {
         const i = (flags & 2)  || /italic|oblique/.test(n);
         return (i ? 'italic ' : '') + (b ? 'bold ' : '');
     };
-    const norm = text => (text || '').toLocaleLowerCase('es');
     const currentSearchResult = () => E.search.results[E.search.activeIndex] || null;
-    const matchesSearch = id => E.search.results.some(result => result.id === id);
-    const isCurrentSearch = id => currentSearchResult()?.id === id;
+    const matchesSearch = id => E.search.matchIds.has(id);
+    const isCurrentSearch = id => Boolean(currentSearchResult()?.spanIds.includes(id));
     const getEffectiveBlockText = blk => E.changes[blk.id]?.text ?? blk.text;
+
+    /* ── Motor de búsqueda en TODO el PDF ──
+       Une los spans de cada línea (el PDF suele partir palabras y frases en
+       varios fragmentos) y busca cada coincidencia en todas las páginas, como
+       el Buscar/Reemplazar de Excel. */
+    const eOptCase   = $('find-opt-case');
+    const eOptWord   = $('find-opt-word');
+    const eOptAccent = $('find-opt-accents');
+    const eResList   = $('find-results-list');
+    const eResSum    = $('find-results-summary');
+
+    const searchOpts = () => ({
+        matchCase: Boolean(eOptCase?.checked),
+        wholeWord: Boolean(eOptWord?.checked),
+        ignoreAccents: Boolean(eOptAccent?.checked)
+    });
+
+    // Normaliza carácter por carácter para que los índices sigan alineados
+    // con el texto original (á -> a ocupa lo mismo).
+    const foldText = (text, opts) => Array.from(text || '', ch => {
+        let c = opts.matchCase ? ch : ch.toLocaleLowerCase('es');
+        if (opts.ignoreAccents) {
+            const base = c.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            if (base.length === 1) c = base;
+        }
+        return c.length === ch.length ? c : ch;
+    }).join('');
+
+    const isWordChar = ch => Boolean(ch) && /[\p{L}\p{N}_]/u.test(ch);
+
+    // Líneas de una página: texto unido + qué tramo aporta cada span. Entre
+    // spans separados visualmente se agrega un espacio "virtual".
+    const buildPageLines = pageIdx => {
+        const pg = E.pages[pageIdx]; if (!pg) return [];
+        const lines = [];
+        const byKey = new Map();
+        pg.blocks.forEach(blk => {
+            const key = blk.line || `${blk.id}`;
+            let line = byKey.get(key);
+            if (!line) { line = { key, pageIdx, parts: [], text: '' }; byKey.set(key, line); lines.push(line); }
+            const text = getEffectiveBlockText(blk);
+            const prev = line.parts[line.parts.length - 1];
+            if (prev && text) {
+                const gap = blk.x0 - prev.blk.x1;
+                if (gap > blk.size * 0.15 && !/\s$/.test(line.text) && !/^\s/.test(text)) line.text += ' ';
+            }
+            const start = line.text.length;
+            line.text += text;
+            line.parts.push({ blk, start, end: line.text.length });
+        });
+        return lines;
+    };
+
+    const findInLine = (line, needle, opts) => {
+        const hay = foldText(line.text, opts);
+        const found = [];
+        let from = 0;
+        while (needle && from <= hay.length) {
+            const idx = hay.indexOf(needle, from);
+            if (idx < 0) break;
+            const end = idx + needle.length;
+            if (!opts.wholeWord || (!isWordChar(line.text[idx - 1]) && !isWordChar(line.text[end]))) {
+                found.push({ start: idx, end });
+                from = end;
+            } else {
+                from = idx + 1;
+            }
+        }
+        return found;
+    };
+
+    const collectMatches = (query, opts) => {
+        const needle = foldText(query, opts);
+        const results = [];
+        E.pages.forEach((_, pageIdx) => {
+            buildPageLines(pageIdx).forEach(line => {
+                findInLine(line, needle, opts).forEach(({ start, end }) => {
+                    const parts = line.parts.filter(p => p.end > start && p.start < end && p.end > p.start);
+                    if (!parts.length) return;
+                    results.push({
+                        pageIdx, lineKey: line.key, start, end,
+                        spanIds: parts.map(p => p.blk.id),
+                        before: line.text.slice(Math.max(0, start - 30), start),
+                        match: line.text.slice(start, end),
+                        after: line.text.slice(end, end + 30)
+                    });
+                });
+            });
+        });
+        return results;
+    };
+
+    // Reemplaza el tramo [start, end) de una línea repartiendo el cambio entre
+    // los spans que toca: el primero recibe el reemplazo, los demás pierden
+    // la parte que estaba dentro de la coincidencia.
+    const replaceInLine = (line, start, end, replacement) => {
+        let placed = false;
+        line.parts.forEach(part => {
+            if (part.end <= start || part.start >= end || part.end === part.start) return;
+            const text = getEffectiveBlockText(part.blk);
+            const ls = Math.max(0, start - part.start);
+            const le = Math.min(text.length, end - part.start);
+            const newText = text.slice(0, ls) + (placed ? '' : replacement) + text.slice(le);
+            placed = true;
+            const ch = E.changes[part.blk.id] || {};
+            ch.text = newText;
+            E.changes[part.blk.id] = ch;
+        });
+    };
+
+    const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const MAX_LISTED_RESULTS = 300;
+
+    const renderResultsList = () => {
+        if (!eResList) return;
+        const { query, results, activeIndex } = E.search;
+        if (!query || !results.length) {
+            eResList.innerHTML = '';
+            eResList.style.display = 'none';
+            if (eResSum) eResSum.textContent = '';
+            return;
+        }
+        const pagesWith = new Set(results.map(r => r.pageIdx)).size;
+        if (eResSum) eResSum.textContent = `${results.length} coincidencia${results.length !== 1 ? 's' : ''} en ${pagesWith} página${pagesWith !== 1 ? 's' : ''} de ${E.pages.length}`;
+        eResList.style.display = '';
+        eResList.innerHTML = results.slice(0, MAX_LISTED_RESULTS).map((r, i) => `
+            <button type="button" class="find-result-item${i === activeIndex ? ' active' : ''}" data-index="${i}">
+                <span class="find-result-page">Pág. ${r.pageIdx + 1}</span>
+                <span class="find-result-text">${r.before.length >= 30 ? '…' : ''}${escapeHtml(r.before)}<mark>${escapeHtml(r.match)}</mark>${escapeHtml(r.after)}${r.after.length >= 30 ? '…' : ''}</span>
+            </button>`).join('')
+            + (results.length > MAX_LISTED_RESULTS ? `<p class="find-results-more">Mostrando ${MAX_LISTED_RESULTS} de ${results.length}. "Reemplazar todos" aplica a todas.</p>` : '');
+        eResList.querySelector('.find-result-item.active')?.scrollIntoView({ block: 'nearest' });
+    };
 
     const updateSearchUI = () => {
         const { query, results, activeIndex } = E.search;
@@ -225,6 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         eBtnRepOne.disabled = !hasResults;
         eBtnRepAll.disabled = !hasResults;
         eSearchCnt.className = 'find-panel-count';
+        renderResultsList();
         if (!query) {
             eSearchCnt.textContent = '—';
             return;
@@ -242,13 +375,15 @@ document.addEventListener('DOMContentLoaded', () => {
         drawOverlays(E.currentPage - 1);
         const active = currentSearchResult();
         if (active && active.pageIdx === E.currentPage - 1) {
-            const el = eOvr.querySelector(`[data-id="${active.id}"]`);
+            const el = eOvr.querySelector(`[data-id="${active.spanIds[0]}"]`);
             el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
         }
     };
 
+    const emptySearch = () => ({ query: '', results: [], activeIndex: -1, matchIds: new Set() });
+
     const resetSearch = () => {
-        E.search = { query: '', results: [], activeIndex: -1 };
+        E.search = emptySearch();
         eSearchIn.value = '';
         updateSearchUI();
         syncSearchHighlights();
@@ -279,10 +414,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resetSearch();
     };
 
-    const goToSearchResult = async offset => {
+    const goToSearchIndex = async index => {
         const total = E.search.results.length;
         if (!total) return;
-        const nextIndex = (E.search.activeIndex + offset + total) % total;
+        const nextIndex = ((index % total) + total) % total;
         const target = E.search.results[nextIndex];
         E.search.activeIndex = nextIndex;
         updateSearchUI();
@@ -292,26 +427,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             syncSearchHighlights();
         }
-        const blk = E.pages[target.pageIdx]?.blocks.find(block => block.id === target.id);
+        const blk = E.pages[target.pageIdx]?.blocks.find(block => block.id === target.spanIds[0]);
         if (blk) selectBlock(blk, target.pageIdx);
     };
+    const goToSearchResult = offset => goToSearchIndex(E.search.activeIndex + offset);
 
-    const runSearch = async rawQuery => {
-        const query = rawQuery.trim();
+    // jump: navegar a la coincidencia activa (al escribir la búsqueda o tras
+    // reemplazar); sin jump solo se recalculan resultados y resaltados.
+    const runSearch = async (rawQuery, { jump = true } = {}) => {
+        const query = (rawQuery ?? '').trim();
+        const prevIndex = E.search.activeIndex;
+        const queryChanged = query !== E.search.query;
         E.search.query = query;
-        if (!query) {
-            E.search.results = [];
-            E.search.activeIndex = -1;
-            updateSearchUI();
-            syncSearchHighlights();
-            return;
-        }
-
-        const needle = norm(query);
-        const selectedIndex = E.search.results.findIndex(result => result.id === E.selectedId);
-        E.search.results = E.pages.flatMap((page, pageIdx) => page.blocks
-            .filter(blk => norm(getEffectiveBlockText(blk)).includes(needle))
-            .map(blk => ({ id: blk.id, pageIdx })));
+        E.search.results = query ? collectMatches(query, searchOpts()) : [];
+        E.search.matchIds = new Set(E.search.results.flatMap(r => r.spanIds));
 
         if (!E.search.results.length) {
             E.search.activeIndex = -1;
@@ -320,10 +449,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        E.search.activeIndex = selectedIndex >= 0 ? selectedIndex : 0;
-        updateSearchUI();
-        await goToSearchResult(0);
+        // Al cambiar la búsqueda se empieza en la primera coincidencia desde la
+        // página actual; si no, se conserva la posición.
+        let index = Math.min(Math.max(prevIndex, 0), E.search.results.length - 1);
+        if (queryChanged || prevIndex < 0) {
+            const fromHere = E.search.results.findIndex(r => r.pageIdx >= E.currentPage - 1);
+            index = fromHere >= 0 ? fromHere : 0;
+        }
+        E.search.activeIndex = index;
+        if (jump) {
+            await goToSearchIndex(index);
+        } else {
+            updateSearchUI();
+            syncSearchHighlights();
+        }
     };
+    const refreshSearch = () => { if (E.search.query) runSearch(E.search.query, { jump: false }); };
 
     /* ── Redraw edits ── */
     const redrawEdits = pageIdx => {
@@ -500,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ch.size      = parseFloat(ePSize.value) || blk.size;
         E.changes[id] = ch;
         redrawEdits(idx);
-        if (E.search.query) runSearch(E.search.query);
+        refreshSearch();
     };
 
     ePColor.addEventListener('input', () => { ePColorHex.textContent = ePColor.value; livePreview(); });
@@ -525,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
-        if (E.search.query) runSearch(E.search.query);
+        refreshSearch();
     });
 
     /* Reset */
@@ -540,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ePSize.value           = ePropsForm.dataset.oSize;
         updateChUI(); drawOverlays(idx); redrawEdits(idx);
         eOvr.querySelector(`[data-id="${id}"]`)?.classList.add('selected');
-        if (E.search.query) runSearch(E.search.query);
+        refreshSearch();
     });
 
     const updateChUI = () => {
@@ -568,55 +709,65 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /* ── Reemplazar ── */
-    const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const lineOfResult = result => buildPageLines(result.pageIdx).find(line => line.key === result.lineKey);
 
+    // Reemplaza solo la coincidencia activa y pasa a la siguiente.
     const replaceOne = async () => {
         const result = currentSearchResult();
         if (!result || !E.search.query) return;
-        const blk = E.pages[result.pageIdx]?.blocks.find(b => b.id === result.id);
-        if (!blk) return;
+        const line = lineOfResult(result);
+        if (!line) return;
         saveHistoryState();
-        const effectiveText = getEffectiveBlockText(blk);
-        const re = new RegExp(escapeRegex(E.search.query), 'i');
-        const newText = effectiveText.replace(re, eReplaceIn.value);
-        const ch = E.changes[blk.id] || {};
-        ch.text = newText;
-        E.changes[blk.id] = ch;
+        const replacement = eReplaceIn.value;
+        replaceInLine(line, result.start, result.end, replacement);
         updateChUI();
-        drawOverlays(result.pageIdx);
-        redrawEdits(result.pageIdx);
-        await runSearch(E.search.query);
+        drawOverlays(E.currentPage - 1);
+        redrawEdits(E.currentPage - 1);
+        await runSearch(E.search.query, { jump: false });
+        if (!E.search.results.length) return;
+        // Siguiente coincidencia DESPUÉS del texto recién puesto (si el
+        // reemplazo contiene lo buscado, no se vuelve a caer en el mismo sitio).
+        const lineOrder = new Map(buildPageLines(result.pageIdx).map((l, i) => [l.key, i]));
+        const replacedOrder = lineOrder.get(result.lineKey) ?? 0;
+        const newEnd = result.start + replacement.length;
+        const next = E.search.results.findIndex(r => r.pageIdx > result.pageIdx
+            || (r.pageIdx === result.pageIdx && ((lineOrder.get(r.lineKey) ?? 0) > replacedOrder
+                || (r.lineKey === result.lineKey && r.start >= newEnd))));
+        await goToSearchIndex(next >= 0 ? next : 0);
     };
 
+    // Reemplaza TODAS las coincidencias de TODAS las páginas.
     const replaceAll = async () => {
         if (!E.search.query || !E.search.results.length) return;
-        const re = new RegExp(escapeRegex(E.search.query), 'gi');
         const replaceWith = eReplaceIn.value;
+        const total = E.search.results.length;
+        const pagesTouched = new Set(E.search.results.map(r => r.pageIdx)).size;
         saveHistoryState();
-        let count = 0;
-        const seen = new Set();
-        E.search.results.forEach(result => {
-            if (seen.has(result.id)) return;
-            seen.add(result.id);
-            const blk = E.pages[result.pageIdx]?.blocks.find(b => b.id === result.id);
-            if (!blk) return;
-            const effectiveText = getEffectiveBlockText(blk);
-            const newText = effectiveText.replace(re, replaceWith);
-            if (newText !== effectiveText) {
-                const ch = E.changes[blk.id] || {};
-                ch.text = newText;
-                E.changes[blk.id] = ch;
-                count++;
-            }
+        // Por línea y de atrás hacia adelante, para que reemplazar una
+        // coincidencia no corra las posiciones de las anteriores.
+        const byLine = new Map();
+        E.search.results.forEach(r => {
+            const key = `${r.pageIdx}|${r.lineKey}`;
+            if (!byLine.has(key)) byLine.set(key, []);
+            byLine.get(key).push(r);
+        });
+        const linesCache = new Map();
+        byLine.forEach(results => {
+            const pageIdx = results[0].pageIdx;
+            if (!linesCache.has(pageIdx)) linesCache.set(pageIdx, buildPageLines(pageIdx));
+            const line = linesCache.get(pageIdx).find(l => l.key === results[0].lineKey);
+            if (!line) return;
+            results.sort((a, b) => b.start - a.start)
+                .forEach(r => replaceInLine(line, r.start, r.end, replaceWith));
         });
         updateChUI();
         drawOverlays(E.currentPage - 1);
         redrawEdits(E.currentPage - 1);
-        await runSearch(E.search.query);
-        showPanelStatus(`✔ ${count} bloque${count !== 1 ? 's' : ''} reemplazado${count !== 1 ? 's' : ''}`);
+        await runSearch(E.search.query, { jump: false });
+        showPanelStatus(`✔ ${total} coincidencia${total !== 1 ? 's' : ''} reemplazada${total !== 1 ? 's' : ''} en ${pagesTouched} página${pagesTouched !== 1 ? 's' : ''}`);
     };
 
-    eBtnUndo.addEventListener('click', undo);
+    eBtnUndo.addEventListener('click', () => { undo(); refreshSearch(); });
     window.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
             e.preventDefault();
@@ -631,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             undo();
+            refreshSearch();
         }
     });
 
@@ -665,6 +817,14 @@ document.addEventListener('DOMContentLoaded', () => {
     eBtnSC.addEventListener('click', () => closeFindPanel());
     eBtnRepOne.addEventListener('click', () => replaceOne());
     eBtnRepAll.addEventListener('click', () => replaceAll());
+    [eOptCase, eOptWord, eOptAccent].forEach(opt => opt?.addEventListener('change', () => {
+        E.search.activeIndex = -1;
+        if (E.search.query) runSearch(E.search.query);
+    }));
+    eResList?.addEventListener('click', e => {
+        const item = e.target.closest('.find-result-item');
+        if (item) goToSearchIndex(Number(item.dataset.index));
+    });
 
     /* ── Zoom ── */
     const ZOOM_STEP = 0.25, ZOOM_MIN = 0.25, ZOOM_MAX = 4.0;
@@ -689,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetEditor = () => {
         Object.assign(E, {
             file: null, pdfDoc: null, pages: [], changes: {}, selectedId: null,
-            zoomLevel: 1.0, snapshot: null, history: [], search: { query: '', results: [], activeIndex: -1 }
+            zoomLevel: 1.0, snapshot: null, history: [], search: { query: '', results: [], activeIndex: -1, matchIds: new Set() }
         });
         eWS.style.display = 'none'; eDZ.style.display = ''; eFL.style.display = '';
         eFL.innerHTML = ''; eFI.value = ''; eNameIn.value = ''; eOvr.innerHTML = '';
@@ -734,7 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
             E.totalPages = E.pdfDoc.numPages;
             E.currentPage = 1; E.zoomLevel = 1.0; E.changes = {}; E.selectedId = null;
             E.history = [];
-            E.search = { query: '', results: [], activeIndex: -1 };
+            E.search = emptySearch();
             eDZ.style.display = 'none'; eFL.style.display = 'none'; eWS.style.display = 'block';
             eFRPanel.style.display = '';
             eReplaceRow.style.display = '';

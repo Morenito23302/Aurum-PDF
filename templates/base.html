@@ -156,7 +156,7 @@
             ───────────────────────────────────────────── -->
             <section id="editpdf" class="tool-section">
                 <h2>Editar Texto del PDF</h2>
-                <p>Selecciona bloques de texto para editarlos. También puedes buscar y reemplazar masivamente texto en todos los bloques encontrados. Imágenes, tablas, encabezados y logos se conservan intactos.</p>
+                <p>Selecciona bloques de texto para editarlos. También puedes buscar una palabra o frase en todo el PDF y reemplazarla en todas las páginas a la vez, como en Excel. Imágenes, tablas, encabezados y logos se conservan intactos.</p>
 
                 <!-- Advertencia -->
                 <div class="editor-warning">
@@ -216,8 +216,16 @@
                             <button id="btn-replace-one" class="find-panel-action-btn" disabled>Reemplazar</button>
                             <button id="btn-replace-all" class="find-panel-action-btn find-panel-action-primary" disabled>Reemplazar todos</button>
                         </div>
-                        <div id="find-panel-note" class="find-panel-note" style="display:none">Se aplicará al bloque actual o a todos los resultados encontrados.</div>
+                        <div class="find-panel-row find-options-row">
+                            <span class="find-panel-label">Opciones</span>
+                            <label class="find-option"><input type="checkbox" id="find-opt-case"> Coincidir mayúsculas</label>
+                            <label class="find-option"><input type="checkbox" id="find-opt-word"> Palabra completa</label>
+                            <label class="find-option"><input type="checkbox" id="find-opt-accents"> Ignorar tildes</label>
+                        </div>
+                        <div id="find-panel-note" class="find-panel-note" style="display:none">Busca en todas las páginas del PDF. "Reemplazar" cambia la coincidencia marcada; "Reemplazar todos" cambia todas las coincidencias del documento.</div>
                         <div id="find-panel-status" class="find-panel-status" style="display:none"></div>
+                        <div id="find-results-summary" class="find-results-summary"></div>
+                        <div id="find-results-list" class="find-results-list" style="display:none"></div>
                     </div>
 
                     <div class="editor-columns">
