@@ -263,12 +263,79 @@ def convert_to_pdf_util(input_paths, output_path):
         pass
 
 
+def _hidden_text_rects(page):
+    """
+    Zonas de texto que existe en el PDF pero NO se ve en la página:
+    - texto invisible (modo de render 3, típico de capas OCR o plantillas) u
+      opacidad 0;
+    - texto tapado por una figura opaca dibujada después (p. ej. un recuadro
+      blanco encima).
+    Ese texto no debe ofrecerse para editar: al reemplazarlo se volvía visible
+    y la redacción borraba el texto real que estaba encima.
+    """
+    if not hasattr(page, "get_texttrace"):
+        return []
+    try:
+        traces = page.get_texttrace()
+    except Exception:
+        return []
+
+    covers = []
+    try:
+        for drawing in page.get_drawings():
+            if drawing.get("fill") is None or drawing.get("type") not in ("f", "fs"):
+                continue
+            opacity = drawing.get("fill_opacity")
+            if opacity is not None and opacity < 0.95:
+                continue
+            rect = fitz.Rect(drawing.get("rect"))
+            if rect.is_empty:
+                continue
+            covers.append((drawing.get("seqno", -1), rect))
+    except Exception:
+        covers = []
+
+    hidden = []
+    for trace in traces:
+        bbox = trace.get("bbox")
+        if not bbox:
+            continue
+        rect = fitz.Rect(bbox)
+        if rect.is_empty:
+            continue
+        opacity = trace.get("opacity")
+        invisible = trace.get("type") == 3 or (opacity is not None and opacity <= 0.01)
+        if not invisible:
+            seqno = trace.get("seqno", -1)
+            # Tapado: una figura opaca dibujada DESPUÉS cubre casi todo el texto.
+            invisible = any(
+                cover_seq > seqno and abs(cover & rect) >= abs(rect) * 0.8
+                for cover_seq, cover in covers
+            )
+        if invisible:
+            hidden.append(rect)
+    return hidden
+
+
+def _is_hidden_span(bbox, hidden_rects):
+    """True si la mayor parte del span cae sobre texto que no se ve."""
+    if not hidden_rects:
+        return False
+    span_rect = fitz.Rect(bbox)
+    area = abs(span_rect)
+    if area <= 0:
+        return False
+    covered = sum(abs(span_rect & rect) for rect in hidden_rects)
+    return covered >= area * 0.6
+
+
 def extract_text_blocks_util(pdf_path):
     """Extrae todos los bloques de texto (spans) del PDF con posición, fuente y color."""
     doc = fitz.open(pdf_path)
     result = []
     for page_num in range(len(doc)):
         page = doc[page_num]
+        hidden_rects = _hidden_text_rects(page)
         page_dict = page.get_text(
             "dict",
             flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_LIGATURES
@@ -293,6 +360,8 @@ def extract_text_blocks_util(pdf_path):
                     g = (color_int >> 8) & 0xFF
                     b = color_int & 0xFF
                     bbox = span["bbox"]
+                    if _is_hidden_span(bbox, hidden_rects):
+                        continue   # texto que no se ve: no se ofrece para editar
                     origin = span.get("origin", (bbox[0], bbox[3]))
                     page_data["blocks"].append({
                         "id": f"p{page_num}_s{counter}",
